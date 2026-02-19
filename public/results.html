@@ -19,18 +19,125 @@
             text-align: center;
             color: #f87171;
         }
+
+        /* Toggle */
+        .toggle-row {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+
+        .toggle-btn {
+            width: auto;
+            padding: 8px 22px;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.07);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .toggle-btn.active {
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            border-color: transparent;
+        }
+
+        /* Horizontal bars (default) */
+        #chart.horizontal .bar-container {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 50px;
+            height: 12px;
+            margin-bottom: 20px;
+        }
+
+        #chart.horizontal .bar {
+            height: 100%;
+            border-radius: 50px;
+            background: linear-gradient(90deg, #6366f1, #ec4899);
+            transition: width 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        #chart.horizontal .label-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            margin-bottom: 6px;
+        }
+
+        /* Vertical bars */
+        #chart.vertical {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 16px;
+            height: 260px;
+            padding-bottom: 0;
+        }
+
+        #chart.vertical .col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            flex: 1;
+            max-width: 100px;
+            height: 100%;
+        }
+
+        #chart.vertical .v-bar-wrap {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            width: 100%;
+            flex: 1;
+        }
+
+        #chart.vertical .v-bar {
+            width: 100%;
+            border-radius: 10px 10px 0 0;
+            background: linear-gradient(180deg, #ec4899, #6366f1);
+            transition: height 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            min-height: 4px;
+        }
+
+        #chart.vertical .v-label {
+            font-size: 0.78rem;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 8px;
+            word-break: break-word;
+        }
+
+        #chart.vertical .v-count {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #a5b4fc;
+            margin-top: 4px;
+        }
     </style>
 </head>
 
 <body>
-    <div class="container" style="max-width: 800px;">
+    <div class="container" style="max-width:800px;">
         <div class="code-badge" id="code-label"></div>
         <h1 id="title">Canlı Sonuçlar</h1>
-        <div id="chart"></div>
+
+        <div class="toggle-row">
+            <button class="toggle-btn active" id="btn-horizontal" onclick="setMode('horizontal')">▬ Yatay</button>
+            <button class="toggle-btn" id="btn-vertical" onclick="setMode('vertical')">▮ Dikey</button>
+        </div>
+
+        <div id="chart" class="horizontal"></div>
     </div>
+
     <script>
         const socket = io();
         let opts = [];
+        let lastVotes = {};
+        let mode = 'horizontal';
 
         const params = new URLSearchParams(location.search);
         const code = params.get('code');
@@ -45,27 +152,54 @@
         socket.on('init', data => {
             opts = data.options;
             document.getElementById('title').innerText = data.question;
+            lastVotes = data.votes;
             draw(data.votes);
         });
 
-        socket.on('updateVotes', v => draw(v));
-
+        socket.on('updateVotes', v => { lastVotes = v; draw(v); });
         socket.on('pollError', msg => {
             document.getElementById('chart').innerHTML = `<p class="error-state">${msg}</p>`;
         });
 
+        function setMode(m) {
+            mode = m;
+            document.getElementById('chart').className = m;
+            document.getElementById('btn-horizontal').classList.toggle('active', m === 'horizontal');
+            document.getElementById('btn-vertical').classList.toggle('active', m === 'vertical');
+            draw(lastVotes);
+        }
+
         function draw(votes) {
             const chart = document.getElementById('chart');
             const total = Object.values(votes).reduce((a, b) => a + b, 0) || 1;
-            chart.innerHTML = '';
-            opts.forEach((o, i) => {
-                const count = votes[i] || 0;
-                const p = (count / total * 100).toFixed(1);
-                chart.innerHTML += `
-                    <div class="label-row"><span>${o}</span><span>${count} Oy (%${p})</span></div>
-                    <div class="bar-container"><div class="bar" style="width:${p}%"></div></div>
-                `;
-            });
+
+            if (mode === 'horizontal') {
+                chart.innerHTML = '';
+                opts.forEach((o, i) => {
+                    const count = votes[i] || 0;
+                    const p = (count / total * 100).toFixed(1);
+                    chart.innerHTML += `
+                        <div class="label-row"><span>${o}</span><span>${count} Oy (%${p})</span></div>
+                        <div class="bar-container"><div class="bar" style="width:${p}%"></div></div>
+                    `;
+                });
+            } else {
+                chart.innerHTML = '';
+                opts.forEach((o, i) => {
+                    const count = votes[i] || 0;
+                    const p = (count / total * 100).toFixed(1);
+                    const col = document.createElement('div');
+                    col.className = 'col';
+                    col.innerHTML = `
+                        <div class="v-count">${count}</div>
+                        <div class="v-bar-wrap">
+                            <div class="v-bar" style="height:${p}%"></div>
+                        </div>
+                        <div class="v-label">${o}<br><span style="color:#818cf8">%${p}</span></div>
+                    `;
+                    chart.appendChild(col);
+                });
+            }
         }
     </script>
 </body>
