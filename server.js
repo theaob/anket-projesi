@@ -1,7 +1,6 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const qrcode = require('qrcode');
 const path = require('path');
 
 const app = express();
@@ -14,7 +13,6 @@ let pollData = {
     question: "Henüz bir soru oluşturulmadı.",
     options: [],
     votes: {},
-    qrCode: ""
 };
 
 const getLocalIp = () => {
@@ -31,10 +29,6 @@ const getLocalIp = () => {
 const localIp = getLocalIp();
 const PORT = 3000;
 
-const updateQR = (ip) => {
-    qrcode.toDataURL(`http://${ip}:${PORT}`).then(url => { pollData.qrCode = url; });
-};
-updateQR(localIp);
 
 app.get('/export', (req, res) => {
     let csvContent = "\uFEFF"; // UTF-8 BOM for Excel Turkish chars

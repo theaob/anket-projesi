@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="tr">
+
 <head>
     <meta charset="UTF-8">
     <title>Admin Paneli</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
 </head>
+
 <body>
     <div class="container">
         <h1>Anket Kontrolü</h1>
@@ -14,18 +16,16 @@
         <button onclick="save()">Yayınla</button>
         <button onclick="location.href='/export'" style="background:#10b981">Excel Al</button>
         <button onclick="socket.emit('resetVotes')" style="background:#ef4444">Sıfırla</button>
-        <div style="text-align:center; margin-top:20px;">
-            <img id="qr" style="width:150px; border:5px solid white; border-radius:10px;">
-        </div>
     </div>
     <script>
         const socket = io();
         socket.on('init', data => { document.getElementById('qr').src = data.qrCode; });
         function save() {
             const question = document.getElementById('q').value;
-            const options = document.getElementById('opts').value.split(',').map(s=>s.trim());
+            const options = document.getElementById('opts').value.split(',').map(s => s.trim());
             socket.emit('updatePoll', { question, options });
         }
     </script>
 </body>
+
 </html>
