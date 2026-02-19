@@ -2,7 +2,8 @@ name: Build and Push to DockerHub
 
 on:
   push:
-    branches: [ "main" ] # Sadece main branch'ine push yapıldığında çalışır
+    tags:
+      - "v*.*.*"   # Sadece v1.2.3 formatındaki tag push'larında çalışır
 
 jobs:
   build-and-push:
@@ -10,6 +11,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
+      - name: Read version from package.json
+        id: pkg
+        run: echo "VERSION=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
 
       - name: Login to Docker Hub
         uses: docker/login-action@v2
@@ -22,5 +27,7 @@ jobs:
         with:
           context: .
           push: true
-          # Kullanıcı adın ve imaj ismini buraya yaz:
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/anket-app:latest
+          # :vX.Y.Z (tam versiyon) + :latest birlikte yayınlanır
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/anket-app:v${{ steps.pkg.outputs.VERSION }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/anket-app:latest

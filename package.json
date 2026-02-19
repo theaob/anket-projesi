@@ -2,6 +2,12 @@
   "name": "premium-poll-system",
   "version": "1.0.0",
   "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "release:patch": "npm version patch && git push origin HEAD --tags",
+    "release:minor": "npm version minor && git push origin HEAD --tags",
+    "release:major": "npm version major && git push origin HEAD --tags"
+  },
   "dependencies": {
     "express": "^4.18.2",
     "socket.io": "^4.7.2"
