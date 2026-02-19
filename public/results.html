@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Canlı Sonuçlar</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div class="container" style="max-width: 800px;">
+        <h1 id="title">Canlı Sonuçlar</h1>
+        <div id="chart"></div>
+    </div>
+    <script>
+        const socket = io();
+        let opts = [];
+        socket.on('init', data => { opts = data.options; document.getElementById('title').innerText = data.question; draw(data.votes); });
+        socket.on('updateVotes', v => draw(v));
+        function draw(votes) {
+            const chart = document.getElementById('chart');
+            const total = Object.values(votes).reduce((a,b)=>a+b, 0) || 1;
+            chart.innerHTML = '';
+            opts.forEach((o, i) => {
+                const count = votes[i] || 0;
+                const p = (count/total*100).toFixed(1);
+                chart.innerHTML += `<div class="label-row"><span>${o}</span><span>${count} Oy (%${p})</span></div>
+                                    <div class="bar-container"><div class="bar" style="width:${p}%"></div></div>`;
+            });
+        }
+    </script>
+</body>
+</html>

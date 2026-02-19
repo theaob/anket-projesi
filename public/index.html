@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oy Ver</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div class="container" id="main">
+        <h1 id="question">Yükleniyor...</h1>
+        <div id="optionsGroup"></div>
+    </div>
+    <script>
+        const socket = io();
+        socket.on('init', data => {
+            document.getElementById('question').innerText = data.question;
+            const group = document.getElementById('optionsGroup');
+            group.innerHTML = '';
+            data.options.forEach((opt, i) => {
+                const b = document.createElement('button');
+                b.innerText = opt;
+                b.onclick = () => { socket.emit('castVote', i); group.innerHTML = "<h1>Oyunuz Kaydedildi!</h1>"; };
+                group.appendChild(b);
+            });
+        });
+    </script>
+</body>
+</html>
