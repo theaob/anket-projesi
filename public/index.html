@@ -1,30 +1,108 @@
 <!DOCTYPE html>
 <html lang="tr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Oy Ver</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
+    <style>
+        #join-screen,
+        #vote-screen {
+            width: 100%;
+        }
+
+        #vote-screen {
+            display: none;
+        }
+
+        .code-display {
+            font-size: 1rem;
+            color: #a5b4fc;
+            letter-spacing: 4px;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        input {
+            text-align: center;
+            font-size: 1.6rem;
+            letter-spacing: 8px;
+            font-weight: 900;
+        }
+
+        .error {
+            color: #f87171;
+            text-align: center;
+            font-size: 0.9rem;
+            margin-top: 8px;
+            display: none;
+        }
+    </style>
 </head>
+
 <body>
-    <div class="container" id="main">
-        <h1 id="question">Yükleniyor...</h1>
-        <div id="optionsGroup"></div>
+    <div class="container">
+        <!-- Kod giriş ekranı -->
+        <div id="join-screen">
+            <h1>Ankete Katıl</h1>
+            <input type="text" id="code-input" placeholder="0000" maxlength="4" inputmode="numeric"
+                oninput="this.value=this.value.replace(/\D/g,'')">
+            <button onclick="joinPoll()">Katıl</button>
+            <p class="error" id="error-msg">Geçersiz anket kodu. Lütfen tekrar deneyin.</p>
+        </div>
+
+        <!-- Oy verme ekranı -->
+        <div id="vote-screen">
+            <div class="code-display" id="poll-code-label"></div>
+            <h1 id="question">Yükleniyor...</h1>
+            <div id="optionsGroup"></div>
+        </div>
     </div>
+
     <script>
         const socket = io();
-        socket.on('init', data => {
+        let currentCode = null;
+
+        function joinPoll() {
+            const code = document.getElementById('code-input').value.trim();
+            if (code.length !== 4) return;
+            currentCode = code;
+            socket.emit('joinPoll', code);
+        }
+
+        // Allow pressing Enter
+        document.getElementById('code-input').addEventListener('keydown', e => {
+            if (e.key === 'Enter') joinPoll();
+        });
+
+        socket.on('init', (data) => {
+            document.getElementById('error-msg').style.display = 'none';
+            document.getElementById('join-screen').style.display = 'none';
+            document.getElementById('vote-screen').style.display = 'block';
+            document.getElementById('poll-code-label').innerText = `KOD: ${data.code}`;
             document.getElementById('question').innerText = data.question;
+
             const group = document.getElementById('optionsGroup');
             group.innerHTML = '';
             data.options.forEach((opt, i) => {
                 const b = document.createElement('button');
                 b.innerText = opt;
-                b.onclick = () => { socket.emit('castVote', i); group.innerHTML = "<h1>Oyunuz Kaydedildi!</h1>"; };
+                b.onclick = () => {
+                    socket.emit('castVote', { code: currentCode, index: i });
+                    group.innerHTML = '<h1>Oyunuz Kaydedildi!</h1>';
+                };
                 group.appendChild(b);
             });
         });
+
+        socket.on('pollError', (msg) => {
+            const el = document.getElementById('error-msg');
+            el.innerText = msg;
+            el.style.display = 'block';
+        });
     </script>
 </body>
+
 </html>

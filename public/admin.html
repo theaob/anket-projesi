@@ -7,6 +7,131 @@
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
     <style>
+        body {
+            align-items: flex-start;
+            padding: 30px 0;
+        }
+
+        .layout {
+            display: flex;
+            gap: 24px;
+            width: 95%;
+            max-width: 1100px;
+            margin: 0 auto;
+            align-items: flex-start;
+        }
+
+        /* Poll List */
+        .panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 24px;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .list-panel {
+            flex: 0 0 320px;
+        }
+
+        .editor-panel {
+            flex: 1;
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin: 0 0 16px;
+            color: #a5b4fc;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .poll-item {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .poll-item:hover {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: rgba(99, 102, 241, 0.4);
+        }
+
+        .poll-item.active {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: #6366f1;
+        }
+
+        .poll-code {
+            font-size: 1.5rem;
+            font-weight: 900;
+            color: #818cf8;
+            letter-spacing: 4px;
+        }
+
+        .poll-question {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .poll-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .poll-actions button {
+            margin: 0;
+            padding: 6px 12px;
+            font-size: 0.78rem;
+            border-radius: 8px;
+            width: auto;
+        }
+
+        .btn-select {
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+        }
+
+        .btn-delete {
+            background: #ef4444;
+        }
+
+        .btn-delete:hover {
+            background: #dc2626;
+        }
+
+        .btn-reset {
+            background: #f59e0b;
+        }
+
+        .btn-export {
+            background: #10b981;
+        }
+
+        /* Editor */
+        .code-badge {
+            display: inline-block;
+            font-size: 2.2rem;
+            font-weight: 900;
+            letter-spacing: 8px;
+            color: #818cf8;
+            background: rgba(99, 102, 241, 0.12);
+            border: 2px solid rgba(99, 102, 241, 0.3);
+            border-radius: 14px;
+            padding: 8px 24px;
+            margin-bottom: 20px;
+        }
+
         .option-row {
             display: flex;
             gap: 8px;
@@ -26,7 +151,8 @@
             padding: 8px 14px;
             cursor: pointer;
             font-size: 16px;
-            line-height: 1;
+            width: auto;
+            margin: 0;
         }
 
         .btn-remove:hover {
@@ -41,21 +167,96 @@
         #btn-add:hover {
             background: #4f46e5;
         }
+
+        .btn-publish {
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+        }
+
+        .empty-state {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.3);
+            padding: 40px 0;
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <h1>Anket Kontrolü</h1>
-        <input type="text" id="q" placeholder="Soru nedir?">
-        <div id="options-list"></div>
-        <button id="btn-add" onclick="addOption()">+ Seçenek Ekle</button>
-        <button onclick="save()">Yayınla</button>
-        <button onclick="location.href='/export'" style="background:#10b981">Excel Al</button>
-        <button onclick="socket.emit('resetVotes')" style="background:#ef4444">Sıfırla</button>
+    <div class="layout">
+        <!-- Left: Poll List -->
+        <div class="panel list-panel">
+            <h2>Anketler</h2>
+            <div id="poll-list">
+                <p class="empty-state">Henüz anket yok.</p>
+            </div>
+            <button onclick="createPoll()" style="margin-top:8px;">+ Yeni Anket</button>
+        </div>
+
+        <!-- Right: Editor -->
+        <div class="panel editor-panel" id="editor" style="display:none;">
+            <h2>Anket Düzenle</h2>
+            <div class="code-badge" id="editor-code"></div>
+            <input type="text" id="q" placeholder="Soru nedir?">
+            <div id="options-list"></div>
+            <button id="btn-add" onclick="addOption()">+ Seçenek Ekle</button>
+            <button class="btn-publish" onclick="save()">✔ Yayınla</button>
+            <div style="display:flex;gap:8px;margin-top:4px;">
+                <button class="btn-reset" style="flex:1;margin:0;" onclick="resetVotes()">Oyları Sıfırla</button>
+                <button class="btn-export" style="flex:1;margin:0;" onclick="exportCSV()">Excel Al</button>
+            </div>
+        </div>
     </div>
+
     <script>
         const socket = io();
+        let currentCode = null;
+
+        socket.emit('joinAdmin');
+
+        socket.on('pollList', (list) => {
+            const el = document.getElementById('poll-list');
+            if (list.length === 0) {
+                el.innerHTML = '<p class="empty-state">Henüz anket yok.</p>';
+                return;
+            }
+            el.innerHTML = list.map(p => `
+                <div class="poll-item ${p.code === currentCode ? 'active' : ''}" id="item-${p.code}">
+                    <div class="poll-code">${p.code}</div>
+                    <div class="poll-question">${p.question || '—'}</div>
+                    <div class="poll-actions">
+                        <button class="btn-select" onclick="selectPoll('${p.code}')">Seç</button>
+                        <button class="btn-delete" onclick="deletePoll('${p.code}')">Sil</button>
+                    </div>
+                </div>
+            `).join('');
+        });
+
+        socket.on('pollCreated', (code) => selectPoll(code));
+
+        function createPoll() { socket.emit('createPoll'); }
+
+        function selectPoll(code) {
+            currentCode = code;
+            document.getElementById('editor').style.display = 'block';
+            document.getElementById('editor-code').innerText = code;
+
+            // Re-fetch list to highlight active
+            socket.emit('joinAdmin');
+
+            // Clear editor
+            document.getElementById('q').value = '';
+            document.getElementById('options-list').innerHTML = '';
+            addOption(); addOption();
+        }
+
+        function deletePoll(code) {
+            if (!confirm(`${code} kodlu anketi silmek istiyor musunuz?`)) return;
+            socket.emit('deletePoll', code);
+            if (currentCode === code) {
+                currentCode = null;
+                document.getElementById('editor').style.display = 'none';
+            }
+        }
 
         function addOption(value = '') {
             const list = document.getElementById('options-list');
@@ -69,16 +270,22 @@
         }
 
         function save() {
+            if (!currentCode) return;
             const question = document.getElementById('q').value;
             const options = [...document.querySelectorAll('#options-list .option-row input')]
-                .map(i => i.value.trim())
-                .filter(v => v !== '');
-            socket.emit('updatePoll', { question, options });
+                .map(i => i.value.trim()).filter(v => v !== '');
+            socket.emit('updatePoll', { code: currentCode, question, options });
         }
 
-        // Başlangıçta 2 boş seçenek alanı ekle
-        addOption();
-        addOption();
+        function resetVotes() {
+            if (!currentCode) return;
+            if (confirm('Oylar sıfırlanacak. Emin misiniz?')) socket.emit('resetVotes', currentCode);
+        }
+
+        function exportCSV() {
+            if (!currentCode) return;
+            location.href = `/export?code=${currentCode}`;
+        }
     </script>
 </body>
 
