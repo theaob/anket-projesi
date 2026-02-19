@@ -6,25 +6,79 @@
     <title>Admin Paneli</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
+    <style>
+        .option-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .option-row input {
+            flex: 1;
+            margin: 0;
+        }
+
+        .btn-remove {
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 14px;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        .btn-remove:hover {
+            background: #dc2626;
+        }
+
+        #btn-add {
+            background: #6366f1;
+            margin-bottom: 12px;
+        }
+
+        #btn-add:hover {
+            background: #4f46e5;
+        }
+    </style>
 </head>
 
 <body>
     <div class="container">
         <h1>Anket Kontrolü</h1>
         <input type="text" id="q" placeholder="Soru nedir?">
-        <input type="text" id="opts" placeholder="Seçenekler (A, B, C...)">
+        <div id="options-list"></div>
+        <button id="btn-add" onclick="addOption()">+ Seçenek Ekle</button>
         <button onclick="save()">Yayınla</button>
         <button onclick="location.href='/export'" style="background:#10b981">Excel Al</button>
         <button onclick="socket.emit('resetVotes')" style="background:#ef4444">Sıfırla</button>
     </div>
     <script>
         const socket = io();
-        socket.on('init', data => { document.getElementById('qr').src = data.qrCode; });
+
+        function addOption(value = '') {
+            const list = document.getElementById('options-list');
+            const row = document.createElement('div');
+            row.className = 'option-row';
+            row.innerHTML = `
+                <input type="text" placeholder="Seçenek..." value="${value}">
+                <button class="btn-remove" onclick="this.parentElement.remove()">✕</button>
+            `;
+            list.appendChild(row);
+        }
+
         function save() {
             const question = document.getElementById('q').value;
-            const options = document.getElementById('opts').value.split(',').map(s => s.trim());
+            const options = [...document.querySelectorAll('#options-list .option-row input')]
+                .map(i => i.value.trim())
+                .filter(v => v !== '');
             socket.emit('updatePoll', { question, options });
         }
+
+        // Başlangıçta 2 boş seçenek alanı ekle
+        addOption();
+        addOption();
     </script>
 </body>
 
