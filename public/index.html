@@ -69,6 +69,11 @@
             const code = document.getElementById('code-input').value.trim();
             if (code.length !== 4) return;
             currentCode = code;
+            // Daha önce oy kullandıysa direkt sonuç sayfasına gönder
+            if (localStorage.getItem(`voted_${code}`)) {
+                location.href = `results.html?code=${code}`;
+                return;
+            }
             socket.emit('joinPoll', code);
         }
 
@@ -76,6 +81,13 @@
         document.getElementById('code-input').addEventListener('keydown', e => {
             if (e.key === 'Enter') joinPoll();
         });
+
+        // URL'de ?code=XXXX varsa otomatik katıl
+        const urlCode = new URLSearchParams(location.search).get('code');
+        if (urlCode) {
+            document.getElementById('code-input').value = urlCode;
+            joinPoll();
+        }
 
         socket.on('init', (data) => {
             document.getElementById('error-msg').style.display = 'none';
@@ -91,7 +103,8 @@
                 b.innerText = opt;
                 b.onclick = () => {
                     socket.emit('castVote', { code: currentCode, index: i });
-                    group.innerHTML = '<h1>Oyunuz Kaydedildi!</h1>';
+                    localStorage.setItem(`voted_${currentCode}`, '1');
+                    location.href = `results.html?code=${currentCode}`;
                 };
                 group.appendChild(b);
             });
