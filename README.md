@@ -2,7 +2,7 @@
 
 Kapalı ağlarda (Intranet) çalışmak üzere tasarlanmış, ultra profesyonel görünümlü, canlı anket uygulaması. 
 
-![Project Interface](https://via.placeholder.com/800x400?text=Premium+Poll+Interface+Preview)
+[![Build and Push to DockerHub](https://github.com/theaob/anket-projesi/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/theaob/anket-projesi/actions/workflows/docker-publish.yml)
 
 ## ✨ Özellikler
 
