@@ -3,7 +3,7 @@
 Bu proje [Keep a Changelog](https://keepachangelog.com/tr/1.0.0/) formatını,
 ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 
-## [1.0.3] - 2026-03-03
+## [1.0.4] - 2026-03-03
 
 ### Eklendi
 - Versiyon değişikliğinde otomatik tagleme workflowu eklendi.
