@@ -3,6 +3,12 @@
 Bu proje [Keep a Changelog](https://keepachangelog.com/tr/1.0.0/) formatını,
 ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 
+## [1.0.1] - 2026-03-03
+
+### Eklendi
+- Giriş sayfası animasyonu düzeltildi.
+- Sonuç sayfasında dikey/yatay gösterim yeteneği eklendi.
+
 ## [1.0.0] - 2026-02-19
 
 ### Eklendi
