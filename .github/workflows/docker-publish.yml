@@ -3,7 +3,8 @@ name: Build and Push to DockerHub
 on:
   push:
     tags:
-      - "v*.*.*"   # Sadece v1.2.3 formatındaki tag push'larında çalışır
+      - "v*.*.*"
+  workflow_call:
 
 jobs:
   build-and-push:

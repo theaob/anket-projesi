@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      tag_created: ${{ steps.check_tag.outputs.EXISTS == 'false' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -40,3 +42,9 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag ${{ steps.pkg.outputs.VERSION }}
           git push origin ${{ steps.pkg.outputs.VERSION }}
+
+  publish:
+    needs: tag
+    if: needs.tag.outputs.tag_created == 'true'
+    uses: ./.github/workflows/docker-publish.yml
+    secrets: inherit
