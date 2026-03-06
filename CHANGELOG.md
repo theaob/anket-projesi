@@ -3,6 +3,11 @@
 Bu proje [Keep a Changelog](https://keepachangelog.com/tr/1.0.0/) formatını,
 ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 
+## [1.0.5] - 2026-03-06
+
+### Eklendi
+- Admin panelinde anket seçildiğinde seçeneklerin doldurulması düzeltildi.
+
 ## [1.0.4] - 2026-03-03
 
 ### Eklendi

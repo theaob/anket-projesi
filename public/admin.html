@@ -210,10 +210,42 @@
     <script>
         const socket = io();
         let currentCode = null;
+        let allPolls = [];
 
         socket.emit('joinAdmin');
 
         socket.on('pollList', (list) => {
+            allPolls = list;
+            renderPollList(list);
+        });
+
+        socket.on('pollCreated', (code) => selectPoll(code));
+
+        function createPoll() { socket.emit('createPoll'); }
+
+        function selectPoll(code) {
+            currentCode = code;
+            const poll = allPolls.find(p => p.code === code);
+            if (!poll) return;
+
+            document.getElementById('editor').style.display = 'block';
+            document.getElementById('editor-code').innerText = code;
+
+            // Re-render list to highlight active
+            renderPollList(allPolls);
+
+            // Populate editor
+            document.getElementById('q').value = poll.question || '';
+            document.getElementById('options-list').innerHTML = '';
+
+            if (poll.options && poll.options.length > 0) {
+                poll.options.forEach(opt => addOption(opt));
+            } else {
+                addOption(); addOption();
+            }
+        }
+
+        function renderPollList(list) {
             const el = document.getElementById('poll-list');
             if (list.length === 0) {
                 el.innerHTML = '<p class="empty-state">Henüz anket yok.</p>';
@@ -229,24 +261,6 @@
                     </div>
                 </div>
             `).join('');
-        });
-
-        socket.on('pollCreated', (code) => selectPoll(code));
-
-        function createPoll() { socket.emit('createPoll'); }
-
-        function selectPoll(code) {
-            currentCode = code;
-            document.getElementById('editor').style.display = 'block';
-            document.getElementById('editor-code').innerText = code;
-
-            // Re-fetch list to highlight active
-            socket.emit('joinAdmin');
-
-            // Clear editor
-            document.getElementById('q').value = '';
-            document.getElementById('options-list').innerHTML = '';
-            addOption(); addOption();
         }
 
         function deletePoll(code) {
