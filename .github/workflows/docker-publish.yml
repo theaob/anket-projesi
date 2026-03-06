@@ -6,6 +6,9 @@ on:
       - "v*.*.*"
   workflow_call:
 
+permissions:
+  contents: write
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest

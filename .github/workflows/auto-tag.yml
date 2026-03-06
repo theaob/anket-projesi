@@ -46,5 +46,7 @@ jobs:
   publish:
     needs: tag
     if: needs.tag.outputs.tag_created == 'true'
+    permissions:
+      contents: write
     uses: ./.github/workflows/docker-publish.yml
     secrets: inherit
