@@ -3,6 +3,12 @@
 Bu proje [Keep a Changelog](https://keepachangelog.com/tr/1.0.0/) formatını,
 ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 
+## [1.1.0] - 2026-03-06
+
+### Eklendi
+- **Anket Ağırlıkları**: Anket seçeneklerine rakamsal değerler atama ve "Genel Ortalama" hesaplama özelliği eklendi.
+- **GitHub Release Otomasyonu**: Yeni versiyonlarda otomatik GitHub Release oluşturma akışı eklendi.
+
 ## [1.0.5] - 2026-03-06
 
 ### Eklendi

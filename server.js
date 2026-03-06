@@ -78,7 +78,7 @@ io.on('connection', (socket) => {
         const poll = polls.get(code);
         if (!poll) return;
         poll.question = question;
-        poll.options = options;
+        poll.options = options; // Expecting array of { text, weight }
         poll.votes = {};
         options.forEach((_, i) => poll.votes[i] = 0);
         io.to('admin').emit('pollList', getPollList());

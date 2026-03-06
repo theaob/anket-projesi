@@ -131,6 +131,16 @@
         </div>
 
         <div id="chart" class="horizontal"></div>
+
+        <div id="average-container"
+            style="margin-top: 30px; text-align: center; display: none; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 20px; padding: 20px;">
+            <div
+                style="font-size: 0.9rem; color: #a5b4fc; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px;">
+                Genel Ortalama</div>
+            <div id="average-score"
+                style="font-size: 3rem; font-weight: 900; background: linear-gradient(135deg, #6366f1, #a855f7); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;">
+                0.0</div>
+        </div>
     </div>
 
     <script>
@@ -171,23 +181,37 @@
 
         function draw(votes) {
             const chart = document.getElementById('chart');
-            const total = Object.values(votes).reduce((a, b) => a + b, 0) || 1;
+            const total = Object.values(votes).reduce((a, b) => a + b, 0) || 0;
+            let weightedSum = 0;
+            let hasWeights = false;
 
             if (mode === 'horizontal') {
                 chart.innerHTML = '';
                 opts.forEach((o, i) => {
+                    const text = typeof o === 'string' ? o : o.text;
+                    const weight = typeof o === 'string' ? 0 : (o.weight || 0);
+                    if (weight !== 0) hasWeights = true;
+
                     const count = votes[i] || 0;
-                    const p = (count / total * 100).toFixed(1);
+                    weightedSum += count * weight;
+                    const p = total > 0 ? (count / total * 100).toFixed(1) : "0.0";
+
                     chart.innerHTML += `
-                        <div class="label-row"><span>${o}</span><span>${count} Oy (%${p})</span></div>
+                        <div class="label-row"><span>${text}</span><span>${count} Oy (%${p})</span></div>
                         <div class="bar-container"><div class="bar" style="width:${p}%"></div></div>
                     `;
                 });
             } else {
                 chart.innerHTML = '';
                 opts.forEach((o, i) => {
+                    const text = typeof o === 'string' ? o : o.text;
+                    const weight = typeof o === 'string' ? 0 : (o.weight || 0);
+                    if (weight !== 0) hasWeights = true;
+
                     const count = votes[i] || 0;
-                    const p = (count / total * 100).toFixed(1);
+                    weightedSum += count * weight;
+                    const p = total > 0 ? (count / total * 100).toFixed(1) : "0.0";
+
                     const col = document.createElement('div');
                     col.className = 'col';
                     col.innerHTML = `
@@ -195,10 +219,18 @@
                         <div class="v-bar-wrap">
                             <div class="v-bar" style="height:${p}%"></div>
                         </div>
-                        <div class="v-label">${o}<br><span style="color:#818cf8">%${p}</span></div>
+                        <div class="v-label">${text}<br><span style="color:#818cf8">%${p}</span></div>
                     `;
                     chart.appendChild(col);
                 });
+            }
+
+            const avgContainer = document.getElementById('average-container');
+            if (hasWeights && total > 0) {
+                avgContainer.style.display = 'block';
+                document.getElementById('average-score').innerText = (weightedSum / total).toFixed(2);
+            } else {
+                avgContainer.style.display = 'none';
             }
         }
     </script>

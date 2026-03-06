@@ -8,8 +8,9 @@ Kapalı ağlarda (Intranet) çalışmak üzere tasarlanmış, ultra profesyonel 
 
 * **💎 Premium UI:** Glassmorphism ve modern animasyonlarla donatılmış akıcı arayüz.
 * **📡 Canlı Sonuçlar:** Socket.io ile anlık grafik güncellemeleri.
-* **📱 QR Kod Desteği:** Sunucu IP'sini otomatik algılayan dinamik QR kod üretimi.
 * **🛠 Admin Paneli:** Anketi anlık düzenleme ve sonuçları sıfırlama yetkisi.
+* **⚖️ Ağırlıklı Puanlama:** Seçeneklere rakamsal değer atayabilme ve sonuçlarda genel ortalama takibi.
+* **🚀 GitHub Otomasyonu:** Versiyon kontrolü ve otomatik GitHub Release yayını.
 * **📊 Excel Export:** Sonuçları tek tıkla CSV/Excel formatında indirme.
 * **🔒 Kapalı Ağ Uyumu:** İnternet bağımlılığı olmadan %100 offline çalışma.
 * **🐳 Docker Ready:** Tek komutla her ortamda tutarlı kurulum.

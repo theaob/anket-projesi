@@ -138,9 +138,17 @@
             margin-bottom: 8px;
         }
 
-        .option-row input {
+        .option-row input[type="text"] {
             flex: 1;
             margin: 0;
+        }
+
+        .option-row input[type="number"] {
+            width: 70px;
+            margin: 0;
+            text-align: center;
+            letter-spacing: 0;
+            font-size: 1rem;
         }
 
         .btn-remove {
@@ -239,7 +247,10 @@
             document.getElementById('options-list').innerHTML = '';
 
             if (poll.options && poll.options.length > 0) {
-                poll.options.forEach(opt => addOption(opt));
+                poll.options.forEach(opt => {
+                    if (typeof opt === 'string') addOption(opt, 0);
+                    else addOption(opt.text, opt.weight);
+                });
             } else {
                 addOption(); addOption();
             }
@@ -272,12 +283,13 @@
             }
         }
 
-        function addOption(value = '') {
+        function addOption(text = '', weight = 0) {
             const list = document.getElementById('options-list');
             const row = document.createElement('div');
             row.className = 'option-row';
             row.innerHTML = `
-                <input type="text" placeholder="Seçenek..." value="${value}">
+                <input type="text" placeholder="Seçenek..." value="${text}">
+                <input type="number" placeholder="Değer" value="${weight}">
                 <button class="btn-remove" onclick="this.parentElement.remove()">✕</button>
             `;
             list.appendChild(row);
@@ -286,8 +298,12 @@
         function save() {
             if (!currentCode) return;
             const question = document.getElementById('q').value;
-            const options = [...document.querySelectorAll('#options-list .option-row input')]
-                .map(i => i.value.trim()).filter(v => v !== '');
+            const options = [...document.querySelectorAll('#options-list .option-row')]
+                .map(row => {
+                    const text = row.querySelector('input[type="text"]').value.trim();
+                    const weight = parseFloat(row.querySelector('input[type="number"]').value) || 0;
+                    return { text, weight };
+                }).filter(o => o.text !== '');
             socket.emit('updatePoll', { code: currentCode, question, options });
         }
 

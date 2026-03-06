@@ -199,8 +199,9 @@
                 const group = document.getElementById('optionsGroup');
                 group.innerHTML = '';
                 data.options.forEach((opt, i) => {
+                    const text = typeof opt === 'string' ? opt : opt.text;
                     const b = document.createElement('button');
-                    b.innerText = opt;
+                    b.innerText = text;
                     b.onclick = () => {
                         socket.emit('castVote', { code: currentCode, index: i });
                         localStorage.setItem(`voted_${currentCode}`, '1');
