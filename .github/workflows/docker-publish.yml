@@ -34,3 +34,38 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/anket-app:v${{ steps.pkg.outputs.VERSION }}
             ${{ secrets.DOCKERHUB_USERNAME }}/anket-app:latest
+
+  create-release:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Read version from package.json
+        id: pkg
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "VERSION=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Extract Changelog Section
+        id: changelog
+        run: |
+          VERSION="${{ steps.pkg.outputs.VERSION }}"
+          # Extract content between the version header and the next header
+          # Uses sed to find the range. Turkish characters are supported by default in UTF-8 environments.
+          sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '1d;$d' > release_notes.md
+          echo "notes_file=release_notes.md" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.pkg.outputs.VERSION }}
+          name: Release ${{ steps.pkg.outputs.VERSION }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
