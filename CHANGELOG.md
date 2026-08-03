@@ -3,6 +3,16 @@
 Bu proje [Keep a Changelog](https://keepachangelog.com/tr/1.0.0/) formatını,
 ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 
+## [1.3.0] - 2026-08-03
+
+### Eklendi
+- **Kullanım Metrikleri**: Anket bazında ziyaret sayısı ve "oy vermeden ayrılan" sayısı takibi; admin panelinde anket listesi ve düzenleyicide canlı gösterim, CSV dışa aktarımında özet satırlar.
+- **Oylama ve Sonuç Ekranı Animasyonları**: Oylama ekranında seçeneklerin sırayla belirmesi ve seçim anında geri bildirim animasyonu; sonuç ekranında çubukların artık gerçekten akıcı biçimde büyümesi (önceden CSS geçişi tanımlıydı ama grafik her güncellemede sıfırdan çizildiği için hiç çalışmıyordu).
+- **Uçuşan Emoji Efekti**: Bir kullanıcı oy verdiğinde hem oylama ekranında hem de canlı sonuçları izleyenlerin ekranında uçuşan emoji patlaması gösteriliyor.
+
+### Değiştirildi
+- Uygulama genelinde koyu temadan açık (light) renk paletine geçildi.
+
 ## [1.2.0] - 2026-08-03
 
 ### Kaldırıldı
