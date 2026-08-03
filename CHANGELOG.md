@@ -3,6 +3,17 @@
 Bu proje [Keep a Changelog](https://keepachangelog.com/tr/1.0.0/) formatını,
 ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 
+## [1.2.0] - 2026-08-03
+
+### Kaldırıldı
+- **Anket Ağırlıkları**: Seçeneklere ağırlık atama ve "Genel Ortalama" hesaplama özelliği kaldırıldı; seçenekler artık düz metin olarak saklanıyor.
+
+### Düzeltildi
+- CSV dışa aktarımında seçenek metni yerine `[object Object]` yazdıran hata giderildi.
+
+### Değiştirildi
+- Giriş sayfasındaki başlık animasyonu performans için `requestAnimationFrame` ile optimize edildi.
+
 ## [1.1.0] - 2026-03-06
 
 ### Eklendi
