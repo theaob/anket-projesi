@@ -23,9 +23,9 @@
 
         /* Poll List */
         .panel {
-            background: rgba(255, 255, 255, 0.05);
+            background: var(--glass);
             backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--glass-border);
             border-radius: 24px;
             padding: 24px;
             animation: fadeIn 0.5s ease-out;
@@ -43,14 +43,14 @@
             font-size: 1.1rem;
             font-weight: 700;
             margin: 0 0 16px;
-            color: #a5b4fc;
+            color: var(--primary-dark);
             letter-spacing: 0.05em;
             text-transform: uppercase;
         }
 
         .poll-item {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(15, 23, 42, 0.03);
+            border: 1px solid rgba(15, 23, 42, 0.08);
             border-radius: 14px;
             padding: 14px 16px;
             margin-bottom: 10px;
@@ -71,17 +71,25 @@
         .poll-code {
             font-size: 1.5rem;
             font-weight: 900;
-            color: #818cf8;
+            color: var(--primary-dark);
             letter-spacing: 4px;
         }
 
         .poll-question {
             font-size: 0.85rem;
-            color: rgba(255, 255, 255, 0.6);
+            color: var(--text-muted);
             margin-top: 4px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+
+        .poll-stats {
+            font-size: 0.75rem;
+            color: rgba(30, 27, 58, 0.45);
+            margin-top: 6px;
+            display: flex;
+            gap: 12px;
         }
 
         .poll-actions {
@@ -124,12 +132,25 @@
             font-size: 2.2rem;
             font-weight: 900;
             letter-spacing: 8px;
-            color: #818cf8;
+            color: var(--primary-dark);
             background: rgba(99, 102, 241, 0.12);
             border: 2px solid rgba(99, 102, 241, 0.3);
             border-radius: 14px;
             padding: 8px 24px;
             margin-bottom: 20px;
+        }
+
+        .stats-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .stats-row strong {
+            color: var(--primary-dark);
+            font-weight: 700;
         }
 
         .option-row {
@@ -174,7 +195,7 @@
 
         .empty-state {
             text-align: center;
-            color: rgba(255, 255, 255, 0.3);
+            color: rgba(30, 27, 58, 0.35);
             padding: 40px 0;
             font-size: 0.9rem;
         }
@@ -196,6 +217,7 @@
         <div class="panel editor-panel" id="editor" style="display:none;">
             <h2>Anket Düzenle</h2>
             <div class="code-badge" id="editor-code"></div>
+            <div class="stats-row" id="editor-stats"></div>
             <input type="text" id="q" placeholder="Soru nedir?">
             <div id="options-list"></div>
             <button id="btn-add" onclick="addOption()">+ Seçenek Ekle</button>
@@ -217,6 +239,7 @@
         socket.on('pollList', (list) => {
             allPolls = list;
             renderPollList(list);
+            if (currentCode) renderEditorStats();
         });
 
         socket.on('pollCreated', (code) => selectPoll(code));
@@ -230,6 +253,7 @@
 
             document.getElementById('editor').style.display = 'block';
             document.getElementById('editor-code').innerText = code;
+            renderEditorStats();
 
             // Re-render list to highlight active
             renderPollList(allPolls);
@@ -255,12 +279,27 @@
                 <div class="poll-item ${p.code === currentCode ? 'active' : ''}" id="item-${p.code}">
                     <div class="poll-code">${p.code}</div>
                     <div class="poll-question">${p.question || '—'}</div>
+                    <div class="poll-stats">
+                        <span>👁 ${p.visits || 0} ziyaret</span>
+                        <span>✗ ${p.abandoned || 0} ayrıldı</span>
+                    </div>
                     <div class="poll-actions">
                         <button class="btn-select" onclick="selectPoll('${p.code}')">Seç</button>
                         <button class="btn-delete" onclick="deletePoll('${p.code}')">Sil</button>
                     </div>
                 </div>
             `).join('');
+        }
+
+        function renderEditorStats() {
+            const poll = allPolls.find(p => p.code === currentCode);
+            if (!poll) return;
+            const totalVotes = Object.values(poll.votes || {}).reduce((a, b) => a + b, 0);
+            document.getElementById('editor-stats').innerHTML = `
+                <span>👁 Ziyaret: <strong>${poll.visits || 0}</strong></span>
+                <span>✔ Oy: <strong>${totalVotes}</strong></span>
+                <span>✗ Oy vermeden ayrılan: <strong>${poll.abandoned || 0}</strong></span>
+            `;
         }
 
         function deletePoll(code) {

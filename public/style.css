@@ -1,15 +1,18 @@
 :root {
     --primary: #6366f1;
     --secondary: #a855f7;
-    --bg: #0f172a;
-    --glass: rgba(255, 255, 255, 0.05);
+    --primary-dark: #4338ca;
+    --text: #1e1b3a;
+    --text-muted: rgba(30, 27, 58, 0.6);
+    --glass: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(15, 23, 42, 0.08);
 }
 
 body {
     margin: 0;
     font-family: 'Inter', -apple-system, sans-serif;
-    background: radial-gradient(circle at top left, #1e1b4b, #0f172a);
-    color: white;
+    background: radial-gradient(circle at top left, #eef2ff, #f8fafc);
+    color: var(--text);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -19,10 +22,10 @@ body {
 .container {
     background: var(--glass);
     backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--glass-border);
     padding: 2.5rem;
     border-radius: 28px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 20px 40px -12px rgba(99, 102, 241, 0.2);
     width: 90%;
     max-width: 500px;
     animation: fadeIn 0.6s ease-out;
@@ -30,11 +33,11 @@ body {
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-h1 { font-size: 1.8rem; font-weight: 800; text-align: center; margin-bottom: 2rem; background: linear-gradient(to right, #fff, #a5b4fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+h1 { font-size: 1.8rem; font-weight: 800; text-align: center; margin-bottom: 2rem; background: linear-gradient(to right, var(--primary-dark), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
 input {
-    width: 100%; padding: 14px; margin: 8px 0; border-radius: 14px; border: 1px solid rgba(255,255,255,0.1);
-    background: rgba(0,0,0,0.2); color: white; box-sizing: border-box;
+    width: 100%; padding: 14px; margin: 8px 0; border-radius: 14px; border: 1px solid rgba(15, 23, 42, 0.12);
+    background: rgba(15, 23, 42, 0.03); color: var(--text); box-sizing: border-box;
 }
 
 button {
@@ -45,6 +48,34 @@ button {
 
 button:active { transform: scale(0.96); }
 
-.bar-container { background: rgba(255,255,255,0.05); border-radius: 50px; height: 12px; margin-bottom: 20px; }
+.bar-container { background: rgba(99, 102, 241, 0.08); border-radius: 50px; height: 12px; margin-bottom: 20px; }
 .bar { height: 100%; border-radius: 50px; background: linear-gradient(90deg, #6366f1, #ec4899); transition: width 1s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
 .label-row { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px; }
+
+/* Floating emoji burst (voting + results screens) */
+.emoji-particle {
+    position: fixed;
+    z-index: 9999;
+    pointer-events: none;
+    font-size: 1.6rem;
+    animation-name: emojiFloat;
+    animation-timing-function: ease-out;
+    animation-fill-mode: forwards;
+}
+
+@keyframes emojiFloat {
+    0% {
+        transform: translate(-50%, -50%) translate(0, 0) scale(0.6);
+        opacity: 0;
+    }
+
+    15% {
+        opacity: 1;
+        transform: translate(-50%, -50%) translate(calc(var(--dx) * 0.2), -20px) scale(1.15);
+    }
+
+    100% {
+        transform: translate(-50%, -50%) translate(var(--dx), -180px) scale(0.9);
+        opacity: 0;
+    }
+}

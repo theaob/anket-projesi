@@ -7,6 +7,7 @@
     <title>Oy Ver</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
+    <script src="emoji-burst.js"></script>
     <style>
         #join-screen,
         #vote-screen {
@@ -17,9 +18,53 @@
             display: none;
         }
 
+        #optionsGroup button {
+            opacity: 0;
+            animation: optionSlideIn 0.4s ease-out forwards;
+        }
+
+        @keyframes optionSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(14px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        #optionsGroup button:disabled {
+            cursor: default;
+        }
+
+        #optionsGroup button:disabled:not(.selected) {
+            opacity: 0.5;
+        }
+
+        #optionsGroup button.selected {
+            animation: optionSelected 0.5s ease-out;
+        }
+
+        @keyframes optionSelected {
+            0% {
+                transform: scale(1);
+            }
+
+            40% {
+                transform: scale(1.05);
+                box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.25);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
         .code-display {
             font-size: 1rem;
-            color: #a5b4fc;
+            color: var(--primary-dark);
             letter-spacing: 4px;
             text-align: center;
             margin-bottom: 1rem;
@@ -33,7 +78,7 @@
         }
 
         .error {
-            color: #f87171;
+            color: #dc2626;
             text-align: center;
             font-size: 0.9rem;
             margin-top: 8px;
@@ -77,7 +122,7 @@
             white-space: pre !important;
             will-change: transform !important;
             font-weight: 900 !important;
-            filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.1)) !important;
+            filter: drop-shadow(0 2px 6px rgba(99, 102, 241, 0.2)) !important;
         }
 
         @keyframes move_gradient {
@@ -210,10 +255,20 @@
                 data.options.forEach((opt, i) => {
                     const b = document.createElement('button');
                     b.innerText = opt;
+                    b.style.animationDelay = `${i * 0.08}s`;
                     b.onclick = () => {
+                        const rect = b.getBoundingClientRect();
+                        if (window.spawnEmojiBurst) {
+                            spawnEmojiBurst(rect.left + rect.width / 2, rect.top, 10);
+                        }
+                        b.classList.add('selected');
+                        [...group.children].forEach(btn => btn.disabled = true);
+
                         socket.emit('castVote', { code: currentCode, index: i });
                         localStorage.setItem(`voted_${currentCode}`, '1');
-                        location.href = `results.html?code=${currentCode}`;
+                        setTimeout(() => {
+                            location.href = `results.html?code=${currentCode}`;
+                        }, 700);
                     };
                     group.appendChild(b);
                 });

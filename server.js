@@ -50,6 +50,8 @@ app.get('/export', (req, res) => {
         const text = String(opt).replace(/"/g, '""');
         csvContent += `"${text}",${poll.votes[i] || 0}\n`;
     });
+    csvContent += `\nZiyaret,${poll.visits || 0}\n`;
+    csvContent += `Oy Vermeden Ayrilan,${poll.abandoned || 0}\n`;
     res.setHeader('Content-disposition', `attachment; filename=anket_${code}.csv`);
     res.set('Content-Type', 'text/csv; charset=utf-8');
     res.send(csvContent);
@@ -65,7 +67,7 @@ io.on('connection', (socket) => {
 
     socket.on('createPoll', () => {
         const code = generateCode();
-        polls.set(code, { code, question: 'Yeni Anket', options: [], votes: {} });
+        polls.set(code, { code, question: 'Yeni Anket', options: [], votes: {}, visits: 0, abandoned: 0 });
         io.to('admin').emit('pollList', getPollList());
         socket.emit('pollCreated', code);
     });
@@ -76,6 +78,8 @@ io.on('connection', (socket) => {
         poll.question = question;
         poll.options = options; // Expecting array of option strings
         poll.votes = Object.fromEntries(options.map((_, i) => [i, 0]));
+        poll.visits = 0;
+        poll.abandoned = 0;
         io.to('admin').emit('pollList', getPollList());
         io.to(`poll:${code}`).emit('init', poll);
     });
@@ -89,6 +93,8 @@ io.on('connection', (socket) => {
         const poll = polls.get(code);
         if (!poll) return;
         Object.keys(poll.votes).forEach(v => poll.votes[v] = 0);
+        poll.visits = 0;
+        poll.abandoned = 0;
         io.to(`poll:${code}`).emit('updateVotes', poll.votes);
         io.to('admin').emit('pollList', getPollList());
     });
@@ -101,14 +107,39 @@ io.on('connection', (socket) => {
             return;
         }
         socket.join(`poll:${code}`);
+        socket.data.pollCode = code;
+        socket.data.voted = false;
+        poll.visits++;
         socket.emit('init', poll);
+        io.to('admin').emit('pollList', getPollList());
     });
 
     socket.on('castVote', ({ code, index }) => {
         const poll = polls.get(code);
         if (!poll || poll.votes[index] === undefined) return;
         poll.votes[index]++;
+        socket.data.voted = true;
         io.to(`poll:${code}`).emit('updateVotes', poll.votes);
+        io.to('admin').emit('pollList', getPollList());
+    });
+
+    // ── Results-viewer events (live results page; not part of the voting funnel) ──
+    socket.on('joinResults', (code) => {
+        const poll = polls.get(code);
+        if (!poll) {
+            socket.emit('pollError', 'Geçersiz anket kodu.');
+            return;
+        }
+        socket.join(`poll:${code}`);
+        socket.emit('init', poll);
+    });
+
+    socket.on('disconnect', () => {
+        const { pollCode, voted } = socket.data;
+        if (!pollCode || voted) return;
+        const poll = polls.get(pollCode);
+        if (!poll) return;
+        poll.abandoned++;
         io.to('admin').emit('pollList', getPollList());
     });
 });

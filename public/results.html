@@ -6,18 +6,19 @@
     <title>Canlı Sonuçlar</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
+    <script src="emoji-burst.js"></script>
     <style>
         .code-badge {
             text-align: center;
             font-size: 1rem;
-            color: #a5b4fc;
+            color: var(--primary-dark);
             letter-spacing: 4px;
             margin-bottom: 0.5rem;
         }
 
         .error-state {
             text-align: center;
-            color: #f87171;
+            color: #dc2626;
         }
 
         /* Toggle */
@@ -34,8 +35,9 @@
             border-radius: 50px;
             font-size: 0.85rem;
             font-weight: 600;
-            background: rgba(255, 255, 255, 0.07);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(15, 23, 42, 0.04);
+            border: 1px solid rgba(15, 23, 42, 0.1);
+            color: var(--text);
             cursor: pointer;
             transition: 0.2s;
         }
@@ -43,11 +45,12 @@
         .toggle-btn.active {
             background: linear-gradient(135deg, #6366f1, #a855f7);
             border-color: transparent;
+            color: white;
         }
 
         /* Horizontal bars (default) */
         #chart.horizontal .bar-container {
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(99, 102, 241, 0.08);
             border-radius: 50px;
             height: 12px;
             margin-bottom: 20px;
@@ -106,7 +109,7 @@
         #chart.vertical .v-label {
             font-size: 0.78rem;
             text-align: center;
-            color: rgba(255, 255, 255, 0.7);
+            color: var(--text-muted);
             margin-top: 8px;
             word-break: break-word;
         }
@@ -114,7 +117,7 @@
         #chart.vertical .v-count {
             font-size: 0.85rem;
             font-weight: 700;
-            color: #a5b4fc;
+            color: var(--primary-dark);
             margin-top: 4px;
         }
     </style>
@@ -138,6 +141,7 @@
         let opts = [];
         let lastVotes = {};
         let mode = 'horizontal';
+        let built = false;
 
         const params = new URLSearchParams(location.search);
         const code = params.get('code');
@@ -146,17 +150,26 @@
             document.getElementById('chart').innerHTML = '<p class="error-state">Lütfen ?code=XXXX parametresi ile açın.</p>';
         } else {
             document.getElementById('code-label').innerText = `KOD: ${code}`;
-            socket.emit('joinPoll', code);
+            socket.emit('joinResults', code);
         }
 
         socket.on('init', data => {
             opts = data.options;
             document.getElementById('title').innerText = data.question;
             lastVotes = data.votes;
-            draw(data.votes);
+            built = false;
+            render(data.votes);
         });
 
-        socket.on('updateVotes', v => { lastVotes = v; draw(v); });
+        socket.on('updateVotes', v => {
+            const increased = opts
+                .map((_, i) => i)
+                .filter(i => (v[i] || 0) > (lastVotes[i] || 0));
+            lastVotes = v;
+            render(v);
+            increased.forEach(burstAtOption);
+        });
+
         socket.on('pollError', msg => {
             document.getElementById('chart').innerHTML = `<p class="error-state">${msg}</p>`;
         });
@@ -166,41 +179,85 @@
             document.getElementById('chart').className = m;
             document.getElementById('btn-horizontal').classList.toggle('active', m === 'horizontal');
             document.getElementById('btn-vertical').classList.toggle('active', m === 'vertical');
-            draw(lastVotes);
+            built = false;
+            render(lastVotes);
         }
 
-        function draw(votes) {
-            const chart = document.getElementById('chart');
+        function computeRows(votes) {
             const total = Object.values(votes).reduce((a, b) => a + b, 0) || 0;
-
-            const rows = opts.map((text, i) => {
+            return opts.map((text, i) => {
                 const count = votes[i] || 0;
                 const p = total > 0 ? (count / total * 100).toFixed(1) : "0.0";
                 return { text, count, p };
             });
+        }
 
-            chart.innerHTML = '';
-            if (mode === 'horizontal') {
-                rows.forEach(({ text, count, p }) => {
-                    chart.innerHTML += `
-                        <div class="label-row"><span>${text}</span><span>${count} Oy (%${p})</span></div>
-                        <div class="bar-container"><div class="bar" style="width:${p}%"></div></div>
-                    `;
-                });
+        // Builds fresh DOM (data-index tagged) when the structure changes, otherwise
+        // updates existing elements in place so the CSS width/height transitions animate.
+        function render(votes) {
+            const rows = computeRows(votes);
+            const chart = document.getElementById('chart');
+
+            if (!built || chart.children.length !== rows.length) {
+                chart.innerHTML = '';
+                if (mode === 'horizontal') {
+                    rows.forEach((row, i) => {
+                        const wrap = document.createElement('div');
+                        wrap.className = 'row-wrap';
+                        wrap.dataset.index = i;
+                        wrap.innerHTML = `
+                            <div class="label-row"><span>${row.text}</span><span class="count-label"></span></div>
+                            <div class="bar-container"><div class="bar" style="width:0%"></div></div>
+                        `;
+                        chart.appendChild(wrap);
+                    });
+                } else {
+                    rows.forEach((row, i) => {
+                        const col = document.createElement('div');
+                        col.className = 'col';
+                        col.dataset.index = i;
+                        col.innerHTML = `
+                            <div class="v-count"></div>
+                            <div class="v-bar-wrap"><div class="v-bar" style="height:0%"></div></div>
+                            <div class="v-label">${row.text}<br><span style="color:var(--primary-dark)" class="v-percent"></span></div>
+                        `;
+                        chart.appendChild(col);
+                    });
+                }
+                built = true;
+                // Force a layout pass so the browser registers the 0% starting state
+                // before we set the real values, otherwise the transition is skipped.
+                requestAnimationFrame(() => applyValues(rows));
             } else {
-                rows.forEach(({ text, count, p }) => {
-                    const col = document.createElement('div');
-                    col.className = 'col';
-                    col.innerHTML = `
-                        <div class="v-count">${count}</div>
-                        <div class="v-bar-wrap">
-                            <div class="v-bar" style="height:${p}%"></div>
-                        </div>
-                        <div class="v-label">${text}<br><span style="color:#818cf8">%${p}</span></div>
-                    `;
-                    chart.appendChild(col);
-                });
+                applyValues(rows);
             }
+        }
+
+        function applyValues(rows) {
+            rows.forEach((row, i) => {
+                if (mode === 'horizontal') {
+                    const wrap = document.querySelector(`.row-wrap[data-index="${i}"]`);
+                    if (!wrap) return;
+                    wrap.querySelector('.bar').style.width = `${row.p}%`;
+                    wrap.querySelector('.count-label').textContent = `${row.count} Oy (%${row.p})`;
+                } else {
+                    const col = document.querySelector(`.col[data-index="${i}"]`);
+                    if (!col) return;
+                    col.querySelector('.v-bar').style.height = `${row.p}%`;
+                    col.querySelector('.v-count').textContent = row.count;
+                    col.querySelector('.v-percent').textContent = `%${row.p}`;
+                }
+            });
+        }
+
+        function burstAtOption(i) {
+            if (!window.spawnEmojiBurst) return;
+            const el = mode === 'horizontal'
+                ? document.querySelector(`.row-wrap[data-index="${i}"] .bar-container`)
+                : document.querySelector(`.col[data-index="${i}"] .v-bar-wrap`);
+            if (!el) return;
+            const rect = el.getBoundingClientRect();
+            spawnEmojiBurst(rect.left + rect.width / 2, rect.top, 8);
         }
     </script>
 </body>
