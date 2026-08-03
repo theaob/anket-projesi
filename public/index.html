@@ -117,33 +117,38 @@
             const text = "Ankete Katıl";
             waveText.innerHTML = "";
 
-            text.split('').forEach((char, i) => {
+            // Senkronize bir akış için her harfe negatif gecikme veriyoruz
+            const letters = text.split('').map((char, i) => {
                 const span = document.createElement('span');
                 span.className = 'letter';
                 span.textContent = char;
-                // Senkronize bir akış için her harfe negatif gecikme veriyoruz
                 span.style.animationDelay = `${i * -0.15}s`;
                 waveText.appendChild(span);
+                return span;
             });
 
-            const letters = document.querySelectorAll('.letter');
+            const MAX_DIST = 300;
+            let mouseX = 0, mouseY = 0;
+            let frameQueued = false;
 
-            document.addEventListener('mousemove', (e) => {
-                const mouseX = e.clientX;
-                const mouseY = e.clientY;
+            function applyForces() {
+                frameQueued = false;
 
-                letters.forEach((span) => {
+                // Read phase: measure every letter before writing any transform,
+                // so a single mousemove triggers at most one layout recalculation.
+                const centers = letters.map(span => {
                     const rect = span.getBoundingClientRect();
-                    const charX = rect.left + rect.width / 2;
-                    const charY = rect.top + rect.height / 2;
+                    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+                });
 
-                    const diffX = mouseX - charX;
-                    const diffY = mouseY - charY;
-                    const dist = Math.sqrt(diffX * diffX + diffY * diffY);
+                // Write phase
+                letters.forEach((span, i) => {
+                    const diffX = mouseX - centers[i].x;
+                    const diffY = mouseY - centers[i].y;
+                    const dist = Math.hypot(diffX, diffY);
 
-                    const maxDist = 300;
-                    if (dist < maxDist) {
-                        const force = (maxDist - dist) / maxDist;
+                    if (dist < MAX_DIST) {
+                        const force = (MAX_DIST - dist) / MAX_DIST;
                         const moveX = diffX * force * 0.6;
                         const moveY = diffY * force * 0.6;
                         const rotate = moveX * 0.2;
@@ -153,6 +158,15 @@
                         span.style.transform = `translate(0, 0) rotate(0deg) scale(1)`;
                     }
                 });
+            }
+
+            document.addEventListener('mousemove', (e) => {
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+                if (!frameQueued) {
+                    frameQueued = true;
+                    requestAnimationFrame(applyForces);
+                }
             });
         })();
 
@@ -195,7 +209,7 @@
                 group.innerHTML = '';
                 data.options.forEach((opt, i) => {
                     const b = document.createElement('button');
-                    b.innerText = opt.text;
+                    b.innerText = opt;
                     b.onclick = () => {
                         socket.emit('castVote', { code: currentCode, index: i });
                         localStorage.setItem(`voted_${currentCode}`, '1');

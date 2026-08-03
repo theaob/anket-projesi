@@ -47,7 +47,7 @@ app.get('/export', (req, res) => {
     let csvContent = "\uFEFF";
     csvContent += "Secenek,Oy Sayisi\n";
     poll.options.forEach((opt, i) => {
-        const text = String(opt.text).replace(/"/g, '""');
+        const text = String(opt).replace(/"/g, '""');
         csvContent += `"${text}",${poll.votes[i] || 0}\n`;
     });
     res.setHeader('Content-disposition', `attachment; filename=anket_${code}.csv`);
@@ -74,7 +74,7 @@ io.on('connection', (socket) => {
         const poll = polls.get(code);
         if (!poll) return;
         poll.question = question;
-        poll.options = options; // Expecting array of { text, weight }
+        poll.options = options; // Expecting array of option strings
         poll.votes = Object.fromEntries(options.map((_, i) => [i, 0]));
         io.to('admin').emit('pollList', getPollList());
         io.to(`poll:${code}`).emit('init', poll);

@@ -131,16 +131,6 @@
         </div>
 
         <div id="chart" class="horizontal"></div>
-
-        <div id="average-container"
-            style="margin-top: 30px; text-align: center; display: none; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 20px; padding: 20px;">
-            <div
-                style="font-size: 0.9rem; color: #a5b4fc; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px;">
-                Genel Ortalama</div>
-            <div id="average-score"
-                style="font-size: 3rem; font-weight: 900; background: linear-gradient(135deg, #6366f1, #a855f7); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;">
-                0.0</div>
-        </div>
     </div>
 
     <script>
@@ -182,18 +172,11 @@
         function draw(votes) {
             const chart = document.getElementById('chart');
             const total = Object.values(votes).reduce((a, b) => a + b, 0) || 0;
-            let weightedSum = 0;
-            let hasWeights = false;
 
-            const rows = opts.map((o, i) => {
-                const weight = o.weight || 0;
-                if (weight !== 0) hasWeights = true;
-
+            const rows = opts.map((text, i) => {
                 const count = votes[i] || 0;
-                weightedSum += count * weight;
                 const p = total > 0 ? (count / total * 100).toFixed(1) : "0.0";
-
-                return { text: o.text, count, p };
+                return { text, count, p };
             });
 
             chart.innerHTML = '';
@@ -217,14 +200,6 @@
                     `;
                     chart.appendChild(col);
                 });
-            }
-
-            const avgContainer = document.getElementById('average-container');
-            if (hasWeights && total > 0) {
-                avgContainer.style.display = 'block';
-                document.getElementById('average-score').innerText = (weightedSum / total).toFixed(2);
-            } else {
-                avgContainer.style.display = 'none';
             }
         }
     </script>

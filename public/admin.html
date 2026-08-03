@@ -143,14 +143,6 @@
             margin: 0;
         }
 
-        .option-row input[type="number"] {
-            width: 70px;
-            margin: 0;
-            text-align: center;
-            letter-spacing: 0;
-            font-size: 1rem;
-        }
-
         .btn-remove {
             background: #ef4444;
             color: white;
@@ -247,7 +239,7 @@
             document.getElementById('options-list').innerHTML = '';
 
             if (poll.options && poll.options.length > 0) {
-                poll.options.forEach(opt => addOption(opt.text, opt.weight));
+                poll.options.forEach(opt => addOption(opt));
             } else {
                 addOption(); addOption();
             }
@@ -280,13 +272,12 @@
             }
         }
 
-        function addOption(text = '', weight = 0) {
+        function addOption(text = '') {
             const list = document.getElementById('options-list');
             const row = document.createElement('div');
             row.className = 'option-row';
             row.innerHTML = `
                 <input type="text" placeholder="Seçenek..." value="${text}">
-                <input type="number" placeholder="Değer" value="${weight}">
                 <button class="btn-remove" onclick="this.parentElement.remove()">✕</button>
             `;
             list.appendChild(row);
@@ -296,11 +287,8 @@
             if (!currentCode) return;
             const question = document.getElementById('q').value;
             const options = [...document.querySelectorAll('#options-list .option-row')]
-                .map(row => {
-                    const text = row.querySelector('input[type="text"]').value.trim();
-                    const weight = parseFloat(row.querySelector('input[type="number"]').value) || 0;
-                    return { text, weight };
-                }).filter(o => o.text !== '');
+                .map(row => row.querySelector('input[type="text"]').value.trim())
+                .filter(text => text !== '');
             socket.emit('updatePoll', { code: currentCode, question, options });
         }
 
