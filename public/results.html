@@ -185,33 +185,27 @@
             let weightedSum = 0;
             let hasWeights = false;
 
+            const rows = opts.map((o, i) => {
+                const weight = o.weight || 0;
+                if (weight !== 0) hasWeights = true;
+
+                const count = votes[i] || 0;
+                weightedSum += count * weight;
+                const p = total > 0 ? (count / total * 100).toFixed(1) : "0.0";
+
+                return { text: o.text, count, p };
+            });
+
+            chart.innerHTML = '';
             if (mode === 'horizontal') {
-                chart.innerHTML = '';
-                opts.forEach((o, i) => {
-                    const text = typeof o === 'string' ? o : o.text;
-                    const weight = typeof o === 'string' ? 0 : (o.weight || 0);
-                    if (weight !== 0) hasWeights = true;
-
-                    const count = votes[i] || 0;
-                    weightedSum += count * weight;
-                    const p = total > 0 ? (count / total * 100).toFixed(1) : "0.0";
-
+                rows.forEach(({ text, count, p }) => {
                     chart.innerHTML += `
                         <div class="label-row"><span>${text}</span><span>${count} Oy (%${p})</span></div>
                         <div class="bar-container"><div class="bar" style="width:${p}%"></div></div>
                     `;
                 });
             } else {
-                chart.innerHTML = '';
-                opts.forEach((o, i) => {
-                    const text = typeof o === 'string' ? o : o.text;
-                    const weight = typeof o === 'string' ? 0 : (o.weight || 0);
-                    if (weight !== 0) hasWeights = true;
-
-                    const count = votes[i] || 0;
-                    weightedSum += count * weight;
-                    const p = total > 0 ? (count / total * 100).toFixed(1) : "0.0";
-
+                rows.forEach(({ text, count, p }) => {
                     const col = document.createElement('div');
                     col.className = 'col';
                     col.innerHTML = `

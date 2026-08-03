@@ -247,10 +247,7 @@
             document.getElementById('options-list').innerHTML = '';
 
             if (poll.options && poll.options.length > 0) {
-                poll.options.forEach(opt => {
-                    if (typeof opt === 'string') addOption(opt, 0);
-                    else addOption(opt.text, opt.weight);
-                });
+                poll.options.forEach(opt => addOption(opt.text, opt.weight));
             } else {
                 addOption(); addOption();
             }

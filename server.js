@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const os = require('os');
 
 const app = express();
 const server = http.createServer(app);
@@ -21,16 +22,10 @@ function generateCode() {
 }
 
 function getPollList() {
-    return [...polls.values()].map(p => ({
-        code: p.code,
-        question: p.question,
-        options: p.options,
-        votes: p.votes
-    }));
+    return [...polls.values()];
 }
 
 const getLocalIp = () => {
-    const os = require('os');
     const interfaces = os.networkInterfaces();
     for (let iface in interfaces) {
         for (let details of interfaces[iface]) {
@@ -52,7 +47,8 @@ app.get('/export', (req, res) => {
     let csvContent = "\uFEFF";
     csvContent += "Secenek,Oy Sayisi\n";
     poll.options.forEach((opt, i) => {
-        csvContent += `"${opt}",${poll.votes[i] || 0}\n`;
+        const text = String(opt.text).replace(/"/g, '""');
+        csvContent += `"${text}",${poll.votes[i] || 0}\n`;
     });
     res.setHeader('Content-disposition', `attachment; filename=anket_${code}.csv`);
     res.set('Content-Type', 'text/csv; charset=utf-8');
@@ -79,8 +75,7 @@ io.on('connection', (socket) => {
         if (!poll) return;
         poll.question = question;
         poll.options = options; // Expecting array of { text, weight }
-        poll.votes = {};
-        options.forEach((_, i) => poll.votes[i] = 0);
+        poll.votes = Object.fromEntries(options.map((_, i) => [i, 0]));
         io.to('admin').emit('pollList', getPollList());
         io.to(`poll:${code}`).emit('init', poll);
     });

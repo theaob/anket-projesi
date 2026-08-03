@@ -156,13 +156,8 @@
             });
         })();
 
-        let socket;
-        try {
-            if (typeof io !== 'undefined') {
-                socket = io();
-                setupSocketHandlers();
-            }
-        } catch (e) { console.error(e); }
+        const socket = io();
+        setupSocketHandlers();
 
         let currentCode = null;
 
@@ -174,7 +169,7 @@
                 location.href = `results.html?code=${code}`;
                 return;
             }
-            if (socket) socket.emit('joinPoll', code);
+            socket.emit('joinPoll', code);
         }
 
         document.getElementById('code-input').addEventListener('keydown', e => {
@@ -199,9 +194,8 @@
                 const group = document.getElementById('optionsGroup');
                 group.innerHTML = '';
                 data.options.forEach((opt, i) => {
-                    const text = typeof opt === 'string' ? opt : opt.text;
                     const b = document.createElement('button');
-                    b.innerText = text;
+                    b.innerText = opt.text;
                     b.onclick = () => {
                         socket.emit('castVote', { code: currentCode, index: i });
                         localStorage.setItem(`voted_${currentCode}`, '1');
