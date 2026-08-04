@@ -3,6 +3,15 @@
 Bu proje [Keep a Changelog](https://keepachangelog.com/tr/1.0.0/) formatını,
 ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 
+## [1.3.1] - 2026-08-04
+
+### Düzeltildi
+- Statik dosyalar artık `Cache-Control: no-cache` ile sunuluyor; tarayıcılar her istekte sunucuyla doğrulama yapıyor (ETag/304), böylece yeni bir sürüm elle önbellek temizlemeye gerek kalmadan bir sonraki sayfa yüklemesinde devreye giriyor.
+
+### Değiştirildi
+- Giriş ekranındaki "Ankete Katıl" başlığı artık fare girişi olmadan da sürekli dalgalanıyor; fareyi harfe yaklaştırmak dalga genliğini artırıyor (önceden harfleri imlece doğru çekiyordu).
+- Uçuşan emoji efektinin ekranda kalma süresi uzatıldı ve oy verme ekranındaki sonuçlara yönlendirme gecikmesi, efektin görülebilmesi için artırıldı.
+
 ## [1.3.0] - 2026-08-03
 
 ### Eklendi
