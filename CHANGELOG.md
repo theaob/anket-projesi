@@ -3,6 +3,11 @@
 Bu proje [Keep a Changelog](https://keepachangelog.com/tr/1.0.0/) formatını,
 ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 
+## [1.4.0] - 2026-08-04
+
+### Eklendi
+- **Yeni Oylama Ekranı Tasarımı**: Katılım ekranı; animasyonlu bulanık arka plan, dört haneli kutu şeklinde kod girişi, akan gradyanlı dalga/çevirme başlık animasyonu ve oy verildiğinde onay işareti + parçacık patlamalı kutlama efektiyle yenilendi. Oy verdikten sonra gerçek zamanlı yüzde gösterimiyle sonuçlara yönlendiriliyor.
+
 ## [1.3.1] - 2026-08-04
 
 ### Düzeltildi
