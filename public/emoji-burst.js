@@ -9,7 +9,7 @@
             el.textContent = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
 
             const dx = (Math.random() - 0.5) * 160;
-            const duration = 900 + Math.random() * 500;
+            const duration = 1800 + Math.random() * 800;
             el.style.left = `${x}px`;
             el.style.top = `${y}px`;
             el.style.setProperty('--dx', `${dx}px`);

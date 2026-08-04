@@ -8,7 +8,9 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static('public'));
+app.use(express.static('public', {
+    setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache')
+}));
 
 // polls: Map<code: string, pollData>
 const polls = new Map();

@@ -172,46 +172,56 @@
                 return span;
             });
 
-            const MAX_DIST = 300;
-            let mouseX = 0, mouseY = 0;
-            let frameQueued = false;
+            // Idle wave: always animating. Mouse proximity boosts its amplitude instead
+            // of pulling letters toward the cursor.
+            const MAX_DIST = 260;
+            const WAVE_SPEED = 2.4;       // radians/second
+            const PHASE_STEP = 0.45;      // phase offset per letter, makes the wave travel across the text
+            const BASE_AMPLITUDE = 6;     // px, resting bob height
+            const BOOST_AMPLITUDE = 22;   // px, extra height at full mouse proximity
+            const BASE_ROTATE = 2;        // deg, resting tilt
+            const BOOST_ROTATE = 6;       // deg, extra tilt at full mouse proximity
 
-            function applyForces() {
-                frameQueued = false;
+            let mouseX = -9999, mouseY = -9999;
+            let centers = [];
 
-                // Read phase: measure every letter before writing any transform,
-                // so a single mousemove triggers at most one layout recalculation.
-                const centers = letters.map(span => {
+            function measureLetters() {
+                centers = letters.map(span => {
+                    const prevTransform = span.style.transform;
+                    span.style.transform = 'none';
                     const rect = span.getBoundingClientRect();
+                    span.style.transform = prevTransform;
                     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
                 });
-
-                // Write phase
-                letters.forEach((span, i) => {
-                    const diffX = mouseX - centers[i].x;
-                    const diffY = mouseY - centers[i].y;
-                    const dist = Math.hypot(diffX, diffY);
-
-                    if (dist < MAX_DIST) {
-                        const force = (MAX_DIST - dist) / MAX_DIST;
-                        const moveX = diffX * force * 0.6;
-                        const moveY = diffY * force * 0.6;
-                        const rotate = moveX * 0.2;
-                        const scale = 1 + (force * 0.4);
-                        span.style.transform = `translate(${moveX}px, ${moveY}px) rotate(${rotate}deg) scale(${scale})`;
-                    } else {
-                        span.style.transform = `translate(0, 0) rotate(0deg) scale(1)`;
-                    }
-                });
             }
+
+            measureLetters();
+            // Re-measure once the container's fade-in (0.6s) has settled, and on resize.
+            setTimeout(measureLetters, 700);
+            window.addEventListener('resize', measureLetters);
+
+            function tick(now) {
+                const t = now / 1000;
+                letters.forEach((span, i) => {
+                    const center = centers[i];
+                    const dist = center ? Math.hypot(mouseX - center.x, mouseY - center.y) : Infinity;
+                    const force = dist < MAX_DIST ? (MAX_DIST - dist) / MAX_DIST : 0;
+
+                    const phase = t * WAVE_SPEED + i * PHASE_STEP;
+                    const amplitude = BASE_AMPLITUDE + BOOST_AMPLITUDE * force;
+                    const rotateAmplitude = BASE_ROTATE + BOOST_ROTATE * force;
+
+                    const y = Math.sin(phase) * amplitude;
+                    const rotate = Math.sin(phase) * rotateAmplitude;
+                    span.style.transform = `translateY(${y.toFixed(2)}px) rotate(${rotate.toFixed(2)}deg)`;
+                });
+                requestAnimationFrame(tick);
+            }
+            requestAnimationFrame(tick);
 
             document.addEventListener('mousemove', (e) => {
                 mouseX = e.clientX;
                 mouseY = e.clientY;
-                if (!frameQueued) {
-                    frameQueued = true;
-                    requestAnimationFrame(applyForces);
-                }
             });
         })();
 
@@ -268,7 +278,7 @@
                         localStorage.setItem(`voted_${currentCode}`, '1');
                         setTimeout(() => {
                             location.href = `results.html?code=${currentCode}`;
-                        }, 700);
+                        }, 1100);
                     };
                     group.appendChild(b);
                 });
