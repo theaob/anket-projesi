@@ -1,296 +1,404 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="tr">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oy Ver</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="emoji-burst.js"></script>
-    <style>
-        #join-screen,
-        #vote-screen {
-            width: 100%;
-        }
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Oy Ver</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 24px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: radial-gradient(circle at 30% 20%, #eef0ff 0%, #f7f7fb 45%, #eef1fb 100%);
+    position: relative; overflow: hidden;
+  }
+  .blob { position: fixed; width: 46vmax; height: 46vmax; max-width: 640px; max-height: 640px; border-radius: 50%;
+    filter: blur(70px); opacity: 0.5; z-index: 0; animation: blobMove 5s ease-in-out infinite; pointer-events: none; }
+  .blob-a { background: #a855f7; top: -12%; left: -10%; }
+  .blob-b { background: #ff7a2e; bottom: -14%; right: -8%; animation-delay: -2.5s; }
+  @keyframes blobMove { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(12%, -10%) scale(1.35); } }
+  @media (prefers-reduced-motion: reduce) { .blob { animation: none; } }
+  .card {
+    width: min(94vw, 520px); background: #ffffff; border-radius: 32px; padding: clamp(32px, 6vw, 56px) clamp(24px, 5vw, 48px);
+    box-shadow: 0 30px 60px -20px rgba(60, 50, 130, 0.18), 0 4px 12px rgba(60, 50, 130, 0.06);
+    text-align: center; position: relative; z-index: 1;
+  }
+  .title { margin: 0 0 40px; font-weight: 800; font-size: clamp(38px, 7.5vw, 62px); line-height: 1; letter-spacing: -0.02em;
+    display: flex; justify-content: center; flex-wrap: wrap; gap: 0.3em; position: relative; }
+  .title .word {
+    display: inline-flex; flex: 0 0 auto;
+  }
+  .title .letter {
+    display: inline-block;
+    background-image: linear-gradient(90deg, #ff7a2e, #ff3d5e, #a855f7, #5b52e8, #ff7a2e);
+    background-repeat: repeat-x; -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 6px 14px rgba(255, 61, 94, 0.28));
+    cursor: default;
+  }
 
-        #vote-screen {
-            display: none;
-        }
+  .field { position: relative; margin-bottom: 16px; }
+  .digit-row { display: flex; gap: 10px; justify-content: center; }
+  .digit-box { width: 100%; max-width: 64px; aspect-ratio: 1; border-radius: 14px; background: #f2f2f6;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 26px; color: #4b4b57;
+    font-feature-settings: "tnum" 1; transition: background .15s ease, transform .2s ease; }
+  .digit-box.filled { background: #ede8ff; }
+  .digit-box.active { box-shadow: 0 0 0 2px #a855f7 inset; }
+  .digit-box.pop { animation: digitPop .35s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes digitPop { 0% { transform: scale(1); } 45% { transform: scale(1.15); } 100% { transform: scale(1); } }
+  .code-input {
+    position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: none; outline: none;
+  }
+  .error { min-height: 20px; margin: 0 0 8px; color: #ff3d5e; font-size: 14px; font-weight: 600; }
 
-        #optionsGroup button {
-            opacity: 0;
-            animation: optionSlideIn 0.4s ease-out forwards;
-        }
+  .btn-join {
+    width: 100%; border: none; border-radius: 18px; padding: 18px; font: inherit; font-weight: 700; font-size: 17px;
+    color: #fff; letter-spacing: 0.01em; cursor: pointer;
+    background: linear-gradient(90deg, #5b52e8, #a855f7); background-size: 160% auto; background-position: 0 0;
+    box-shadow: 0 14px 26px -10px rgba(123, 76, 232, 0.55);
+    transition: transform .4s cubic-bezier(.34,1.56,.64,1), box-shadow .3s ease, background-position .3s ease;
+    transform-origin: 10% 0%;
+  }
+  .btn-join:hover { transform: translateY(-2px); background-position: 100% 0; box-shadow: 0 18px 30px -10px rgba(123, 76, 232, 0.6); }
+  .btn-join:active { transform: translateY(0); }
+  .btn-join:focus-visible { outline: 3px solid #a855f7; outline-offset: 2px; }
 
-        @keyframes optionSlideIn {
-            from {
-                opacity: 0;
-                transform: translateY(14px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        #optionsGroup button:disabled {
-            cursor: default;
-        }
-
-        #optionsGroup button:disabled:not(.selected) {
-            opacity: 0.5;
-        }
-
-        #optionsGroup button.selected {
-            animation: optionSelected 0.5s ease-out;
-        }
-
-        @keyframes optionSelected {
-            0% {
-                transform: scale(1);
-            }
-
-            40% {
-                transform: scale(1.05);
-                box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.25);
-            }
-
-            100% {
-                transform: scale(1);
-            }
-        }
-
-        .code-display {
-            font-size: 1rem;
-            color: var(--primary-dark);
-            letter-spacing: 4px;
-            text-align: center;
-            margin-bottom: 1rem;
-        }
-
-        input {
-            text-align: center;
-            font-size: 1.6rem;
-            letter-spacing: 8px;
-            font-weight: 900;
-        }
-
-        .error {
-            color: #dc2626;
-            text-align: center;
-            font-size: 0.9rem;
-            margin-top: 8px;
-            display: none;
-        }
-
-        /* Gökkuşağı Efekti - style.css çakışmalarını tamamen ezmek için */
-        #join-screen h1#wave-text {
-            all: unset;
-            display: flex !important;
-            justify-content: center !important;
-            align-items: center !important;
-            font-family: 'Inter', sans-serif !important;
-            font-size: 4rem !important;
-            font-weight: 900 !important;
-            margin-bottom: 3rem !important;
-            perspective: 1000px !important;
-            cursor: default !important;
-            padding: 40px 0 !important;
-            text-align: center !important;
-            width: 100% !important;
-        }
-
-        .letter {
-            display: inline-block !important;
-            /* Akıcı Gökkuşağı - Sub-properties kullanıyoruz ki animasyon çalışabilsin */
-            background-image: linear-gradient(90deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000) !important;
-            background-size: 800px 100% !important;
-            background-repeat: repeat !important;
-            background-position: 0 0;
-            /* !important OLMAMALI */
-
-            -webkit-background-clip: text !important;
-            background-clip: text !important;
-            -webkit-text-fill-color: transparent !important;
-            color: transparent !important;
-
-            animation: move_gradient 3s linear infinite !important;
-            transition: transform 0.1s ease-out !important;
-            pointer-events: none !important;
-            white-space: pre !important;
-            will-change: transform !important;
-            font-weight: 900 !important;
-            filter: drop-shadow(0 2px 6px rgba(99, 102, 241, 0.2)) !important;
-        }
-
-        @keyframes move_gradient {
-            0% {
-                background-position: 0 0;
-            }
-
-            100% {
-                background-position: 800px 0;
-            }
-        }
-    </style>
+  .poll { display: none; margin-top: 32px; padding-top: 28px; border-top: 2px dashed #ece9f7; text-align: left; }
+  .poll[data-active] { display: block; animation: rise .35s ease; }
+  @keyframes rise { from { opacity: 0; translate: 0 8px; } to { opacity: 1; translate: 0 0; } }
+  .poll-q { margin: 0 0 4px; font-size: 20px; font-weight: 800; color: #38364a; }
+  .poll-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #a855f7; margin-bottom: 16px; }
+  .poll-live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #ff3d5e;
+    animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.6); opacity: 0.5; } }
+  .poll-options { display: flex; flex-direction: column; gap: 10px; }
+  .poll-opt { position: relative; display: block; width: 100%; text-align: left; border: none; border-radius: 14px;
+    background: #f4f3f9; padding: 14px 16px; cursor: pointer; font: inherit; font-size: 15px; font-weight: 600; color: #38364a;
+    overflow: hidden; transition: transform .15s ease; }
+  .poll-opt:hover { transform: translateX(3px); }
+  .poll-opt:disabled { cursor: default; }
+  .poll-opt .fill { position: absolute; inset: 0; width: 0%; z-index: 0;
+    background: linear-gradient(90deg, rgba(91, 82, 232, 0.18), rgba(168, 85, 247, 0.28));
+    transition: width .6s ease; transition-delay: var(--bardelay, 0s); }
+  .poll-opt .row2 { position: relative; z-index: 1; display: flex; justify-content: space-between; gap: 12px; }
+  .poll-opt .pct { color: #8b3fe0; display: none; font-feature-settings: "tnum" 1; }
+  .poll[data-voted] .fill, .poll[data-voted] .pct { display: revert; }
+  .poll-foot { margin: 14px 0 0; font-size: 13px; font-weight: 600; color: #a3a1b3; }
+</style>
 </head>
-
 <body>
-    <div class="container">
-        <div id="join-screen">
-            <h1 id="wave-text">Ankete Katıl</h1>
-            <input type="text" id="code-input" placeholder="0000" maxlength="4" inputmode="numeric"
-                oninput="this.value=this.value.replace(/\D/g,'')">
-            <button onclick="joinPoll()">Katıl</button>
-            <p class="error" id="error-msg">Geçersiz anket kodu. Lütfen tekrar deneyin.</p>
-        </div>
+<div class="blob blob-a"></div>
+<div class="blob blob-b"></div>
+<div class="card">
+  <h1 class="title" id="title" aria-label="Ankete Katıl"></h1>
 
-        <div id="vote-screen">
-            <div class="code-display" id="poll-code-label"></div>
-            <h1 id="question">Yükleniyor...</h1>
-            <div id="optionsGroup"></div>
-        </div>
+  <form id="join-form" novalidate>
+    <div class="field">
+      <div class="digit-row" id="digit-row">
+        <div class="digit-box"></div>
+        <div class="digit-box"></div>
+        <div class="digit-box"></div>
+        <div class="digit-box"></div>
+      </div>
+      <input class="code-input" id="join-code" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" aria-describedby="join-error" aria-label="4 haneli kod" />
     </div>
+    <p class="error" id="join-error" role="alert"></p>
+    <button type="submit" class="btn-join">Katıl</button>
+  </form>
 
-    <script>
-        (function initUI() {
-            const waveText = document.getElementById('wave-text');
-            if (!waveText) return;
+  <div class="poll" id="poll" aria-live="polite">
+    <p class="poll-q" id="poll-q"></p>
+    <span class="poll-live">Canlı</span>
+    <div class="poll-options" id="poll-options"></div>
+    <p class="poll-foot" id="poll-foot"></p>
+  </div>
+</div>
 
-            const text = "Ankete Katıl";
-            waveText.innerHTML = "";
+<script>
+(() => {
+  const input = document.getElementById('join-code');
+  const boxes = Array.from(document.querySelectorAll('.digit-box'));
+  function sync() {
+    const digits = input.value.replace(/\D/g, '');
+    boxes.forEach((box, i) => {
+      const had = box.classList.contains('filled');
+      const has = i < digits.length;
+      box.textContent = digits[i] || '';
+      box.classList.toggle('filled', has);
+      box.classList.toggle('active', i === digits.length);
+      if (has && !had) {
+        box.classList.remove('pop');
+        void box.offsetWidth;
+        box.classList.add('pop');
+      }
+    });
+  }
+  input.addEventListener('input', sync);
+  input.addEventListener('focus', sync);
+  input.addEventListener('blur', sync);
+  document.querySelector('.digit-row').addEventListener('click', () => input.focus());
+  sync();
+})();
+(() => {
+  const titleEl = document.getElementById('title');
+  const letters = [];
+  let li = 0;
+  ['Ankete', 'Katıl'].forEach((word) => {
+    const wordEl = document.createElement('span');
+    wordEl.className = 'word';
+    word.split('').forEach((ch) => {
+      const span = document.createElement('span');
+      span.className = 'letter'; span.textContent = ch;
+      span.dataset.delayIndex = li++;
+      letters.push(span);
+      wordEl.appendChild(span);
+    });
+    titleEl.appendChild(wordEl);
+  });
+  // Drive one continuous gradient across the whole phrase: each letter samples
+  // the same background image, offset by its own position, so the color reads
+  // as flowing text rather than per-letter cycling.
+  function layout() {
+    const w = titleEl.clientWidth || 1;
+    letters.forEach((el) => {
+      el.dataset.left = el.offsetLeft;
+      el.style.backgroundSize = w + 'px 100%';
+    });
+    return w;
+  }
+  let width = layout();
 
-            // Senkronize bir akış için her harfe negatif gecikme veriyoruz
-            const letters = text.split('').map((char, i) => {
-                const span = document.createElement('span');
-                span.className = 'letter';
-                span.textContent = char;
-                span.style.animationDelay = `${i * -0.15}s`;
-                waveText.appendChild(span);
-                return span;
-            });
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-            // Idle wave: always animating. Mouse proximity boosts its amplitude instead
-            // of pulling letters toward the cursor.
-            const MAX_DIST = 260;
-            const WAVE_SPEED = 2.4;       // radians/second
-            const PHASE_STEP = 0.45;      // phase offset per letter, makes the wave travel across the text
-            const BASE_AMPLITUDE = 6;     // px, resting bob height
-            const BOOST_AMPLITUDE = 22;   // px, extra height at full mouse proximity
-            const BASE_ROTATE = 2;        // deg, resting tilt
-            const BOOST_ROTATE = 6;       // deg, extra tilt at full mouse proximity
+  // Idle wave/flip + pointer-pull boost, combined into a single JS-driven loop.
+  // A CSS @keyframes animation and a JS-set inline transform can't share the
+  // `transform` property peacefully (the animation wins every frame, silently
+  // dropping the pointer-driven part) so both effects are computed together here.
+  const WAVE_PERIOD = 1800; // ms, one full bob-and-flip cycle
+  const WAVE_Y = 14;        // px, peak bob height
+  const LETTER_STAGGER = 80; // ms between each letter's phase, makes the wave travel
+  const PULL_RADIUS = 110, PULL_STRENGTH = 30;
 
-            let mouseX = -9999, mouseY = -9999;
-            let centers = [];
+  let centers = [];
+  function measureCenters() {
+    centers = letters.map((el) => {
+      const prevTransform = el.style.transform;
+      el.style.transform = 'none';
+      const r = el.getBoundingClientRect();
+      el.style.transform = prevTransform;
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+  }
+  measureCenters();
 
-            function measureLetters() {
-                centers = letters.map(span => {
-                    const prevTransform = span.style.transform;
-                    span.style.transform = 'none';
-                    const rect = span.getBoundingClientRect();
-                    span.style.transform = prevTransform;
-                    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-                });
-            }
+  addEventListener('resize', () => { width = layout(); measureCenters(); });
 
-            measureLetters();
-            // Re-measure once the container's fade-in (0.6s) has settled, and on resize.
-            setTimeout(measureLetters, 700);
-            window.addEventListener('resize', measureLetters);
+  let mouseX = -9999, mouseY = -9999, pointerActive = false;
+  function updatePointer(e) { mouseX = e.clientX; mouseY = e.clientY; pointerActive = true; }
+  function resetPointer() { pointerActive = false; }
 
-            function tick(now) {
-                const t = now / 1000;
-                letters.forEach((span, i) => {
-                    const center = centers[i];
-                    const dist = center ? Math.hypot(mouseX - center.x, mouseY - center.y) : Infinity;
-                    const force = dist < MAX_DIST ? (MAX_DIST - dist) / MAX_DIST : 0;
+  if (!reduceMotion) {
+    addEventListener('pointermove', updatePointer);
+    addEventListener('pointerdown', updatePointer);
+    addEventListener('pointerleave', resetPointer);
 
-                    const phase = t * WAVE_SPEED + i * PHASE_STEP;
-                    const amplitude = BASE_AMPLITUDE + BOOST_AMPLITUDE * force;
-                    const rotateAmplitude = BASE_ROTATE + BOOST_ROTATE * force;
+    function tick(now) {
+      letters.forEach((el, i) => {
+        const delay = i * LETTER_STAGGER;
+        const t = (((now - delay) % WAVE_PERIOD) + WAVE_PERIOD) % WAVE_PERIOD / WAVE_PERIOD;
+        const wave = Math.sin(t * Math.PI); // 0 at t=0, 1 at t=0.5, 0 at t=1
+        const y = -WAVE_Y * wave;
+        const rotY = 180 * wave;
 
-                    const y = Math.sin(phase) * amplitude;
-                    const rotate = Math.sin(phase) * rotateAmplitude;
-                    span.style.transform = `translateY(${y.toFixed(2)}px) rotate(${rotate.toFixed(2)}deg)`;
-                });
-                requestAnimationFrame(tick);
-            }
-            requestAnimationFrame(tick);
-
-            document.addEventListener('mousemove', (e) => {
-                mouseX = e.clientX;
-                mouseY = e.clientY;
-            });
-        })();
-
-        const socket = io();
-        setupSocketHandlers();
-
-        let currentCode = null;
-
-        function joinPoll() {
-            const code = document.getElementById('code-input').value.trim();
-            if (code.length !== 4) return;
-            currentCode = code;
-            if (localStorage.getItem(`voted_${code}`)) {
-                location.href = `results.html?code=${code}`;
-                return;
-            }
-            socket.emit('joinPoll', code);
+        let pullX = 0, pullY = 0, scale = 1;
+        if (pointerActive) {
+          const c = centers[i];
+          const dx = mouseX - c.x, dy = mouseY - c.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < PULL_RADIUS && dist > 0.1) {
+            const pull = (1 - dist / PULL_RADIUS) * PULL_STRENGTH;
+            pullX = dx / dist * pull;
+            pullY = dy / dist * pull;
+            scale = 1 + pull / 90;
+          }
         }
 
-        document.getElementById('code-input').addEventListener('keydown', e => {
-            if (e.key === 'Enter') joinPoll();
-        });
+        el.style.transform = `translate(${pullX.toFixed(2)}px, ${(y + pullY).toFixed(2)}px) rotateY(${rotY.toFixed(1)}deg) scale(${scale.toFixed(3)})`;
+      });
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
 
-        const urlParams = new URLSearchParams(location.search);
-        const urlCode = urlParams.get('code');
-        if (urlCode) {
-            document.getElementById('code-input').value = urlCode;
-            setTimeout(joinPoll, 500);
-        }
+  if (reduceMotion) {
+    letters.forEach((el) => { el.style.backgroundPositionX = -el.offsetLeft + 'px'; });
+  } else {
+    const period = 2600; // ms for one full left-to-right (or back) sweep
+    let start = null;
+    function sweepTick(ts) {
+      if (start === null) start = ts;
+      const elapsed = (ts - start) % (period * 2);
+      const t = elapsed < period ? elapsed / period : (period * 2 - elapsed) / period; // 0→1→0 ping-pong
+      const shift = t * width; // sweeps the gradient from the first letter to the last, then back
+      letters.forEach((el) => {
+        el.style.backgroundPositionX = (-Number(el.dataset.left) + shift - width) + 'px';
+      });
+      requestAnimationFrame(sweepTick);
+    }
+    requestAnimationFrame(sweepTick);
+  }
+})();
+(() => {
+  const form = document.getElementById('join-form');
+  const input = document.getElementById('join-code');
+  const error = document.getElementById('join-error');
+  const poll = document.getElementById('poll');
+  const questionEl = document.getElementById('poll-q');
+  const optsEl = document.getElementById('poll-options');
+  const foot = document.getElementById('poll-foot');
 
-        function setupSocketHandlers() {
-            socket.on('init', (data) => {
-                document.getElementById('error-msg').style.display = 'none';
-                document.getElementById('join-screen').style.display = 'none';
-                document.getElementById('vote-screen').style.display = 'block';
-                document.getElementById('poll-code-label').innerText = `KOD: ${data.code}`;
-                document.getElementById('question').innerText = data.question;
+  const socket = io();
+  let currentCode = null;
+  let options = [];
+  let voted = false;
 
-                const group = document.getElementById('optionsGroup');
-                group.innerHTML = '';
-                data.options.forEach((opt, i) => {
-                    const b = document.createElement('button');
-                    b.innerText = opt;
-                    b.style.animationDelay = `${i * 0.08}s`;
-                    b.onclick = () => {
-                        const rect = b.getBoundingClientRect();
-                        if (window.spawnEmojiBurst) {
-                            spawnEmojiBurst(rect.left + rect.width / 2, rect.top, 10);
-                        }
-                        b.classList.add('selected');
-                        [...group.children].forEach(btn => btn.disabled = true);
+  function totalVotes(votes) {
+    return Object.values(votes || {}).reduce((a, b) => a + b, 0);
+  }
 
-                        socket.emit('castVote', { code: currentCode, index: i });
-                        localStorage.setItem(`voted_${currentCode}`, '1');
-                        setTimeout(() => {
-                            location.href = `results.html?code=${currentCode}`;
-                        }, 1100);
-                    };
-                    group.appendChild(b);
-                });
-            });
+  // Renders the option buttons. Fill bars always start at width:0% here; when
+  // `voted` is true a follow-up frame bumps them to the real percentage so the
+  // CSS width transition actually has something to animate from.
+  function renderOptions(votes) {
+    const t = totalVotes(votes);
+    optsEl.innerHTML = options.map((label, i) => {
+      const pct = t ? Math.round(((votes[i] || 0) / t) * 100) : 0;
+      return '<button type="button" class="poll-opt" data-i="' + i + '" ' + (voted ? 'disabled' : '') + '>' +
+        '<span class="fill" style="width:0%;--bardelay:' + (i * 0.12) + 's"></span>' +
+        '<span class="row2"><span>' + label + '</span><span class="pct">' + pct + '%</span></span></button>';
+    }).join('');
+    foot.textContent = t.toLocaleString('tr-TR') + ' oy verildi';
 
-            socket.on('pollError', (msg) => {
-                const el = document.getElementById('error-msg');
-                el.innerText = msg;
-                el.style.display = 'block';
-            });
-        }
-    </script>
+    if (!voted) {
+      optsEl.querySelectorAll('.poll-opt').forEach((btn) => {
+        btn.addEventListener('click', () => castVote(Number(btn.dataset.i), btn));
+      });
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      optsEl.querySelectorAll('.poll-opt').forEach((btn, i) => {
+        const pct = t ? Math.round(((votes[i] || 0) / t) * 100) : 0;
+        const fill = btn.querySelector('.fill');
+        if (fill) fill.style.width = pct + '%';
+      });
+    });
+  }
+
+  const EMOJIS = ['🎉', '✨', '🔥', '👍', '💜'];
+  function burst() {
+    const rect = document.querySelector('.card').getBoundingClientRect();
+    const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+    const check = document.createElement('span');
+    check.textContent = '✅';
+    check.style.position = 'fixed';
+    check.style.left = cx + 'px';
+    check.style.top = cy + 'px';
+    check.style.fontSize = '30px';
+    check.style.pointerEvents = 'none';
+    check.style.zIndex = '999';
+    check.style.transform = 'translate(-50%, -50%) scale(0)';
+    document.body.appendChild(check);
+    check.animate([
+      { transform: 'translate(-50%, -50%) scale(0)' },
+      { transform: 'translate(-50%, -50%) scale(1.3)', offset: 0.45 },
+      { transform: 'translate(-50%, -50%) scale(1)', offset: 0.55 },
+      { transform: 'translate(-50%, -50%) scale(1)', opacity: 0, offset: 1 },
+    ], { duration: 1400, easing: 'ease-in-out' }).onfinish = () => check.remove();
+    for (let i = 0; i < 16; i++) {
+      const el = document.createElement('span');
+      el.textContent = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+      el.style.position = 'fixed';
+      el.style.left = cx + 'px';
+      el.style.top = cy + 'px';
+      el.style.fontSize = (18 + Math.random() * 14) + 'px';
+      el.style.pointerEvents = 'none';
+      el.style.zIndex = '999';
+      el.style.willChange = 'transform, opacity';
+      document.body.appendChild(el);
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 70 + Math.random() * 110;
+      const dx = Math.cos(angle) * dist, dy = Math.sin(angle) * dist - 40;
+      const spin = (Math.random() - 0.5) * 480;
+      const anim = el.animate([
+        { transform: 'translate(-50%, -50%) rotate(0deg) scale(0.6)', opacity: 1 },
+        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) rotate(${spin}deg) scale(1)`, opacity: 0 },
+      ], { duration: 700 + Math.random() * 400, easing: 'cubic-bezier(.2,.7,.3,1)' });
+      anim.onfinish = () => el.remove();
+    }
+  }
+
+  function castVote(index) {
+    if (voted || !currentCode) return;
+    voted = true;
+    poll.setAttribute('data-voted', '');
+    localStorage.setItem(`voted_${currentCode}`, '1');
+    optsEl.querySelectorAll('.poll-opt').forEach((b) => { b.disabled = true; });
+    socket.emit('castVote', { code: currentCode, index });
+    burst();
+    setTimeout(() => {
+      location.href = `results.html?code=${currentCode}`;
+    }, 1400);
+  }
+
+  socket.on('init', (data) => {
+    currentCode = data.code;
+    options = data.options;
+    voted = false;
+    error.textContent = '';
+    questionEl.textContent = data.question;
+    poll.removeAttribute('data-voted');
+    renderOptions(data.votes || {});
+    poll.setAttribute('data-active', '');
+    form.style.display = 'none';
+  });
+
+  socket.on('updateVotes', (votes) => {
+    if (voted) renderOptions(votes);
+  });
+
+  socket.on('pollError', (msg) => {
+    error.textContent = msg;
+  });
+
+  function attemptJoin(code) {
+    if (!/^\d{4}$/.test(code)) {
+      error.textContent = '4 haneli kodu gir lütfen.';
+      input.focus();
+      return;
+    }
+    error.textContent = '';
+    if (localStorage.getItem(`voted_${code}`)) {
+      location.href = `results.html?code=${code}`;
+      return;
+    }
+    socket.emit('joinPoll', code);
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    attemptJoin(input.value.trim());
+  });
+
+  const urlParams = new URLSearchParams(location.search);
+  const urlCode = urlParams.get('code');
+  if (urlCode) {
+    input.value = urlCode;
+    input.dispatchEvent(new Event('input'));
+    setTimeout(() => attemptJoin(urlCode), 500);
+  }
+})();
+</script>
 </body>
-
 </html>
