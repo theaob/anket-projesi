@@ -125,7 +125,7 @@ io.on('connection', (socket) => {
         io.to('admin').emit('pollList', getPollList());
     });
 
-    // ── Results-viewer events (live results page; not part of the voting funnel) ──
+    // ── Results-viewer events (used for already-voted revisits; not part of the voting funnel) ──
     socket.on('joinResults', (code) => {
         const poll = polls.get(code);
         if (!poll) {

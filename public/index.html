@@ -352,10 +352,13 @@
   socket.on('init', (data) => {
     currentCode = data.code;
     options = data.options;
-    voted = false;
+    // A code already voted on this browser arrives via joinResults (not
+    // joinPoll), so drop straight into the revealed, disabled results view
+    // instead of letting them vote again.
+    voted = !!localStorage.getItem(`voted_${data.code}`);
     error.textContent = '';
     questionEl.textContent = data.question;
-    poll.removeAttribute('data-voted');
+    poll.toggleAttribute('data-voted', voted);
     renderOptions(data.votes || {});
     poll.setAttribute('data-active', '');
     form.style.display = 'none';
@@ -376,8 +379,10 @@
       return;
     }
     error.textContent = '';
+    // Already voted on this browser: join as a results viewer so re-visits
+    // don't count as a fresh funnel visit or an abandonment.
     if (localStorage.getItem(`voted_${code}`)) {
-      location.href = `results.html?code=${code}`;
+      socket.emit('joinResults', code);
       return;
     }
     socket.emit('joinPoll', code);
