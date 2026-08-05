@@ -347,9 +347,6 @@
     optsEl.querySelectorAll('.poll-opt').forEach((b) => { b.disabled = true; });
     socket.emit('castVote', { code: currentCode, index });
     burst();
-    setTimeout(() => {
-      location.href = `results.html?code=${currentCode}`;
-    }, 1400);
   }
 
   socket.on('init', (data) => {

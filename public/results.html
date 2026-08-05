@@ -1,265 +1,232 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="tr">
-
 <head>
-    <meta charset="UTF-8">
-    <title>Canlı Sonuçlar</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="emoji-burst.js"></script>
-    <style>
-        .code-badge {
-            text-align: center;
-            font-size: 1rem;
-            color: var(--primary-dark);
-            letter-spacing: 4px;
-            margin-bottom: 0.5rem;
-        }
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Canlı Sonuçlar</title>
+<script src="/socket.io/socket.io.js"></script>
+<script src="emoji-burst.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 24px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: radial-gradient(circle at 30% 20%, #eef0ff 0%, #f7f7fb 45%, #eef1fb 100%);
+    position: relative; overflow: hidden;
+  }
+  .blob { position: fixed; width: 46vmax; height: 46vmax; max-width: 640px; max-height: 640px; border-radius: 50%;
+    filter: blur(70px); opacity: 0.5; z-index: 0; animation: blobMove 5s ease-in-out infinite; pointer-events: none; }
+  .blob-a { background: #a855f7; top: -12%; left: -10%; }
+  .blob-b { background: #ff7a2e; bottom: -14%; right: -8%; animation-delay: -2.5s; }
+  @keyframes blobMove { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(12%, -10%) scale(1.35); } }
+  @media (prefers-reduced-motion: reduce) { .blob { animation: none; } }
 
-        .error-state {
-            text-align: center;
-            color: #dc2626;
-        }
+  .card {
+    width: min(94vw, 560px); background: #ffffff; border-radius: 32px; padding: clamp(32px, 6vw, 56px) clamp(24px, 5vw, 48px);
+    box-shadow: 0 30px 60px -20px rgba(60, 50, 130, 0.18), 0 4px 12px rgba(60, 50, 130, 0.06);
+    text-align: left; position: relative; z-index: 1;
+  }
 
-        /* Toggle */
-        .toggle-row {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 24px;
-        }
+  .code-badge { text-align: center; font-size: 13px; font-weight: 700; letter-spacing: 0.14em; color: #a3a1b3;
+    text-transform: uppercase; margin: 0 0 6px; }
+  .poll-title { margin: 0 0 4px; font-size: clamp(22px, 4vw, 28px); font-weight: 800; color: #38364a; text-align: center; }
+  .poll-live { display: flex; justify-content: center; align-items: center; gap: 6px; font-size: 12px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase; color: #a855f7; margin-bottom: 20px; }
+  .poll-live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #ff3d5e;
+    animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.6); opacity: 0.5; } }
 
-        .toggle-btn {
-            width: auto;
-            padding: 8px 22px;
-            border-radius: 50px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            background: rgba(15, 23, 42, 0.04);
-            border: 1px solid rgba(15, 23, 42, 0.1);
-            color: var(--text);
-            cursor: pointer;
-            transition: 0.2s;
-        }
+  .toggle-row { display: flex; justify-content: center; gap: 8px; margin-bottom: 24px; }
+  .toggle-btn { border: none; border-radius: 50px; padding: 8px 20px; font: inherit; font-size: 13px; font-weight: 700;
+    background: #f4f3f9; color: #38364a; cursor: pointer; transition: background .2s ease, color .2s ease, transform .15s ease; }
+  .toggle-btn:hover { transform: translateY(-1px); }
+  .toggle-btn.active { background: linear-gradient(90deg, #5b52e8, #a855f7); color: #fff;
+    box-shadow: 0 10px 20px -8px rgba(123, 76, 232, 0.55); }
 
-        .toggle-btn.active {
-            background: linear-gradient(135deg, #6366f1, #a855f7);
-            border-color: transparent;
-            color: white;
-        }
+  /* Horizontal bars — same shape/behavior as the voted state on the voting card */
+  .poll-options { display: flex; flex-direction: column; gap: 10px; }
+  .poll-opt { position: relative; display: block; width: 100%; text-align: left; border-radius: 14px;
+    background: #f4f3f9; padding: 14px 16px; font: inherit; font-size: 15px; font-weight: 600; color: #38364a;
+    overflow: hidden; }
+  .poll-opt .fill { position: absolute; inset: 0; width: 0%; z-index: 0;
+    background: linear-gradient(90deg, rgba(91, 82, 232, 0.18), rgba(168, 85, 247, 0.28));
+    transition: width .6s ease; transition-delay: var(--bardelay, 0s); }
+  .poll-opt .row2 { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .poll-opt .pct { color: #8b3fe0; white-space: nowrap; font-feature-settings: "tnum" 1; }
 
-        /* Horizontal bars (default) */
-        #chart.horizontal .bar-container {
-            background: rgba(99, 102, 241, 0.08);
-            border-radius: 50px;
-            height: 12px;
-            margin-bottom: 20px;
-        }
+  /* Vertical bars — same palette/rounding, laid out as columns */
+  #chart.vertical { display: flex; align-items: flex-end; justify-content: center; gap: 14px; height: 240px; }
+  #chart.vertical .col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+    flex: 1; max-width: 100px; height: 100%; }
+  #chart.vertical .v-bar-wrap { display: flex; flex-direction: column; justify-content: flex-end; width: 100%; flex: 1; }
+  #chart.vertical .v-bar { width: 100%; border-radius: 10px 10px 4px 4px; min-height: 4px;
+    background: linear-gradient(180deg, #a855f7, #5b52e8); transition: height .6s ease; }
+  #chart.vertical .v-count { font-size: 14px; font-weight: 800; color: #8b3fe0; margin-bottom: 4px;
+    font-feature-settings: "tnum" 1; }
+  #chart.vertical .v-label { font-size: 12px; font-weight: 600; text-align: center; color: #38364a;
+    margin-top: 8px; word-break: break-word; }
+  #chart.vertical .v-percent { color: #8b3fe0; }
 
-        #chart.horizontal .bar {
-            height: 100%;
-            border-radius: 50px;
-            background: linear-gradient(90deg, #6366f1, #ec4899);
-            transition: width 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
+  .poll-foot { margin: 18px 0 0; font-size: 13px; font-weight: 600; color: #a3a1b3; text-align: center; }
+  .error-state { text-align: center; color: #ff3d5e; font-size: 14px; font-weight: 600; margin: 0; }
 
-        #chart.horizontal .label-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.9rem;
-            margin-bottom: 6px;
-        }
-
-        /* Vertical bars */
-        #chart.vertical {
-            display: flex;
-            align-items: flex-end;
-            justify-content: center;
-            gap: 16px;
-            height: 260px;
-            padding-bottom: 0;
-        }
-
-        #chart.vertical .col {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-end;
-            flex: 1;
-            max-width: 100px;
-            height: 100%;
-        }
-
-        #chart.vertical .v-bar-wrap {
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-            width: 100%;
-            flex: 1;
-        }
-
-        #chart.vertical .v-bar {
-            width: 100%;
-            border-radius: 10px 10px 0 0;
-            background: linear-gradient(180deg, #ec4899, #6366f1);
-            transition: height 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            min-height: 4px;
-        }
-
-        #chart.vertical .v-label {
-            font-size: 0.78rem;
-            text-align: center;
-            color: var(--text-muted);
-            margin-top: 8px;
-            word-break: break-word;
-        }
-
-        #chart.vertical .v-count {
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: var(--primary-dark);
-            margin-top: 4px;
-        }
-    </style>
+  /* Floating emoji burst, spawned by emoji-burst.js on each new vote */
+  .emoji-particle {
+    position: fixed; z-index: 9999; pointer-events: none; font-size: 1.6rem;
+    animation-name: emojiFloat; animation-timing-function: ease-out; animation-fill-mode: forwards;
+  }
+  @keyframes emojiFloat {
+    0% { transform: translate(-50%, -50%) translate(0, 0) scale(0.6); opacity: 0; }
+    15% { opacity: 1; transform: translate(-50%, -50%) translate(calc(var(--dx) * 0.2), -20px) scale(1.15); }
+    65% { opacity: 1; transform: translate(-50%, -50%) translate(calc(var(--dx) * 0.7), -140px) scale(1); }
+    100% { transform: translate(-50%, -50%) translate(var(--dx), -220px) scale(0.9); opacity: 0; }
+  }
+</style>
 </head>
-
 <body>
-    <div class="container" style="max-width:800px;">
-        <div class="code-badge" id="code-label"></div>
-        <h1 id="title">Canlı Sonuçlar</h1>
+<div class="blob blob-a"></div>
+<div class="blob blob-b"></div>
+<div class="card">
+  <div class="code-badge" id="code-label"></div>
+  <p class="poll-title" id="title">Canlı Sonuçlar</p>
+  <div class="poll-live">Canlı</div>
 
-        <div class="toggle-row">
-            <button class="toggle-btn active" id="btn-horizontal" onclick="setMode('horizontal')">▬ Yatay</button>
-            <button class="toggle-btn" id="btn-vertical" onclick="setMode('vertical')">▮ Dikey</button>
-        </div>
+  <div class="toggle-row">
+    <button class="toggle-btn active" id="btn-horizontal" onclick="setMode('horizontal')">▬ Yatay</button>
+    <button class="toggle-btn" id="btn-vertical" onclick="setMode('vertical')">▮ Dikey</button>
+  </div>
 
-        <div id="chart" class="horizontal"></div>
-    </div>
+  <div id="chart" class="horizontal poll-options"></div>
+  <p class="poll-foot" id="poll-foot"></p>
+</div>
 
-    <script>
-        const socket = io();
-        let opts = [];
-        let lastVotes = {};
-        let mode = 'horizontal';
-        let built = false;
+<script>
+  const socket = io();
+  let opts = [];
+  let lastVotes = {};
+  let mode = 'horizontal';
+  let built = false;
 
-        const params = new URLSearchParams(location.search);
-        const code = params.get('code');
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
 
-        if (!code) {
-            document.getElementById('chart').innerHTML = '<p class="error-state">Lütfen ?code=XXXX parametresi ile açın.</p>';
-        } else {
-            document.getElementById('code-label').innerText = `KOD: ${code}`;
-            socket.emit('joinResults', code);
-        }
+  if (!code) {
+    document.getElementById('chart').innerHTML = '<p class="error-state">Lütfen ?code=XXXX parametresi ile açın.</p>';
+    document.querySelector('.toggle-row').style.display = 'none';
+  } else {
+    document.getElementById('code-label').innerText = `KOD: ${code}`;
+    socket.emit('joinResults', code);
+  }
 
-        socket.on('init', data => {
-            opts = data.options;
-            document.getElementById('title').innerText = data.question;
-            lastVotes = data.votes;
-            built = false;
-            render(data.votes);
+  socket.on('init', data => {
+    opts = data.options;
+    document.getElementById('title').innerText = data.question;
+    lastVotes = data.votes;
+    built = false;
+    render(data.votes);
+  });
+
+  socket.on('updateVotes', v => {
+    const increased = opts
+      .map((_, i) => i)
+      .filter(i => (v[i] || 0) > (lastVotes[i] || 0));
+    lastVotes = v;
+    render(v);
+    increased.forEach(burstAtOption);
+  });
+
+  socket.on('pollError', msg => {
+    document.getElementById('chart').innerHTML = `<p class="error-state">${msg}</p>`;
+    document.querySelector('.toggle-row').style.display = 'none';
+  });
+
+  function setMode(m) {
+    mode = m;
+    document.getElementById('chart').className = m + ' poll-options';
+    document.getElementById('btn-horizontal').classList.toggle('active', m === 'horizontal');
+    document.getElementById('btn-vertical').classList.toggle('active', m === 'vertical');
+    built = false;
+    render(lastVotes);
+  }
+
+  function computeRows(votes) {
+    const total = Object.values(votes).reduce((a, b) => a + b, 0) || 0;
+    return opts.map((text, i) => {
+      const count = votes[i] || 0;
+      const p = total > 0 ? (count / total * 100).toFixed(1) : "0.0";
+      return { text, count, p };
+    });
+  }
+
+  // Builds fresh DOM (data-index tagged) when the structure changes, otherwise
+  // updates existing elements in place so the CSS width/height transitions animate.
+  function render(votes) {
+    const rows = computeRows(votes);
+    const chart = document.getElementById('chart');
+    const total = rows.reduce((a, r) => a + r.count, 0);
+    document.getElementById('poll-foot').textContent = total.toLocaleString('tr-TR') + ' oy verildi';
+
+    if (!built || chart.children.length !== rows.length) {
+      chart.innerHTML = '';
+      if (mode === 'horizontal') {
+        rows.forEach((row, i) => {
+          const opt = document.createElement('div');
+          opt.className = 'poll-opt';
+          opt.dataset.index = i;
+          opt.innerHTML = `
+            <span class="fill" style="width:0%;--bardelay:${i * 0.12}s"></span>
+            <span class="row2"><span>${row.text}</span><span class="pct"></span></span>
+          `;
+          chart.appendChild(opt);
         });
-
-        socket.on('updateVotes', v => {
-            const increased = opts
-                .map((_, i) => i)
-                .filter(i => (v[i] || 0) > (lastVotes[i] || 0));
-            lastVotes = v;
-            render(v);
-            increased.forEach(burstAtOption);
+      } else {
+        rows.forEach((row, i) => {
+          const col = document.createElement('div');
+          col.className = 'col';
+          col.dataset.index = i;
+          col.innerHTML = `
+            <div class="v-count"></div>
+            <div class="v-bar-wrap"><div class="v-bar" style="height:0%"></div></div>
+            <div class="v-label">${row.text}<br><span class="v-percent"></span></div>
+          `;
+          chart.appendChild(col);
         });
+      }
+      built = true;
+      // Force a layout pass so the browser registers the 0% starting state
+      // before we set the real values, otherwise the transition is skipped.
+      requestAnimationFrame(() => applyValues(rows));
+    } else {
+      applyValues(rows);
+    }
+  }
 
-        socket.on('pollError', msg => {
-            document.getElementById('chart').innerHTML = `<p class="error-state">${msg}</p>`;
-        });
+  function applyValues(rows) {
+    rows.forEach((row, i) => {
+      if (mode === 'horizontal') {
+        const opt = document.querySelector(`.poll-opt[data-index="${i}"]`);
+        if (!opt) return;
+        opt.querySelector('.fill').style.width = `${row.p}%`;
+        opt.querySelector('.pct').textContent = `${row.count.toLocaleString('tr-TR')} oy · %${row.p}`;
+      } else {
+        const col = document.querySelector(`.col[data-index="${i}"]`);
+        if (!col) return;
+        col.querySelector('.v-bar').style.height = `${row.p}%`;
+        col.querySelector('.v-count').textContent = row.count;
+        col.querySelector('.v-percent').textContent = `%${row.p}`;
+      }
+    });
+  }
 
-        function setMode(m) {
-            mode = m;
-            document.getElementById('chart').className = m;
-            document.getElementById('btn-horizontal').classList.toggle('active', m === 'horizontal');
-            document.getElementById('btn-vertical').classList.toggle('active', m === 'vertical');
-            built = false;
-            render(lastVotes);
-        }
-
-        function computeRows(votes) {
-            const total = Object.values(votes).reduce((a, b) => a + b, 0) || 0;
-            return opts.map((text, i) => {
-                const count = votes[i] || 0;
-                const p = total > 0 ? (count / total * 100).toFixed(1) : "0.0";
-                return { text, count, p };
-            });
-        }
-
-        // Builds fresh DOM (data-index tagged) when the structure changes, otherwise
-        // updates existing elements in place so the CSS width/height transitions animate.
-        function render(votes) {
-            const rows = computeRows(votes);
-            const chart = document.getElementById('chart');
-
-            if (!built || chart.children.length !== rows.length) {
-                chart.innerHTML = '';
-                if (mode === 'horizontal') {
-                    rows.forEach((row, i) => {
-                        const wrap = document.createElement('div');
-                        wrap.className = 'row-wrap';
-                        wrap.dataset.index = i;
-                        wrap.innerHTML = `
-                            <div class="label-row"><span>${row.text}</span><span class="count-label"></span></div>
-                            <div class="bar-container"><div class="bar" style="width:0%"></div></div>
-                        `;
-                        chart.appendChild(wrap);
-                    });
-                } else {
-                    rows.forEach((row, i) => {
-                        const col = document.createElement('div');
-                        col.className = 'col';
-                        col.dataset.index = i;
-                        col.innerHTML = `
-                            <div class="v-count"></div>
-                            <div class="v-bar-wrap"><div class="v-bar" style="height:0%"></div></div>
-                            <div class="v-label">${row.text}<br><span style="color:var(--primary-dark)" class="v-percent"></span></div>
-                        `;
-                        chart.appendChild(col);
-                    });
-                }
-                built = true;
-                // Force a layout pass so the browser registers the 0% starting state
-                // before we set the real values, otherwise the transition is skipped.
-                requestAnimationFrame(() => applyValues(rows));
-            } else {
-                applyValues(rows);
-            }
-        }
-
-        function applyValues(rows) {
-            rows.forEach((row, i) => {
-                if (mode === 'horizontal') {
-                    const wrap = document.querySelector(`.row-wrap[data-index="${i}"]`);
-                    if (!wrap) return;
-                    wrap.querySelector('.bar').style.width = `${row.p}%`;
-                    wrap.querySelector('.count-label').textContent = `${row.count} Oy (%${row.p})`;
-                } else {
-                    const col = document.querySelector(`.col[data-index="${i}"]`);
-                    if (!col) return;
-                    col.querySelector('.v-bar').style.height = `${row.p}%`;
-                    col.querySelector('.v-count').textContent = row.count;
-                    col.querySelector('.v-percent').textContent = `%${row.p}`;
-                }
-            });
-        }
-
-        function burstAtOption(i) {
-            if (!window.spawnEmojiBurst) return;
-            const el = mode === 'horizontal'
-                ? document.querySelector(`.row-wrap[data-index="${i}"] .bar-container`)
-                : document.querySelector(`.col[data-index="${i}"] .v-bar-wrap`);
-            if (!el) return;
-            const rect = el.getBoundingClientRect();
-            spawnEmojiBurst(rect.left + rect.width / 2, rect.top, 8);
-        }
-    </script>
+  function burstAtOption(i) {
+    if (!window.spawnEmojiBurst) return;
+    const el = mode === 'horizontal'
+      ? document.querySelector(`.poll-opt[data-index="${i}"]`)
+      : document.querySelector(`.col[data-index="${i}"] .v-bar-wrap`);
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    spawnEmojiBurst(rect.left + rect.width / 2, rect.top, 8);
+  }
+</script>
 </body>
-
 </html>
