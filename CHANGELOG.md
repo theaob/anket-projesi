@@ -3,6 +3,11 @@
 Bu proje [Keep a Changelog](https://keepachangelog.com/tr/1.0.0/) formatını,
 ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 
+## [1.4.2] - 2026-08-05
+
+### Kaldırıldı
+- `results.html` sayfası kaldırıldı. Daha önce oy verilmiş bir kod tekrar girildiğinde, ayrı bir sayfaya yönlendirmek yerine oylama kartı doğrudan aynı sayfada sonuç görünümüne geçiyor.
+
 ## [1.4.1] - 2026-08-05
 
 ### Düzeltildi
