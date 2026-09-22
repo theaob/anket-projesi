@@ -85,6 +85,7 @@
   .poll-opt .pct { color: #8b3fe0; display: none; font-feature-settings: "tnum" 1; }
   .poll[data-voted] .fill, .poll[data-voted] .pct { display: revert; }
   .poll-foot { margin: 14px 0 0; font-size: 13px; font-weight: 600; color: #a3a1b3; }
+  .conn { margin: 16px 0 0; font-size: 13px; font-weight: 600; color: #ff3d5e; }
 </style>
 </head>
 <body>
@@ -113,6 +114,7 @@
     <div class="poll-options" id="poll-options"></div>
     <p class="poll-foot" id="poll-foot"></p>
   </div>
+  <p class="conn" id="conn" role="status" hidden>Bağlantı koptu, yeniden bağlanılıyor…</p>
 </div>
 
 <script>
@@ -257,8 +259,23 @@
   const questionEl = document.getElementById('poll-q');
   const optsEl = document.getElementById('poll-options');
   const foot = document.getElementById('poll-foot');
+  const conn = document.getElementById('conn');
 
-  const socket = io();
+  // A random per-browser ID lets the server remember who already voted, so
+  // voting limits and the results view no longer rely on localStorage flags.
+  function getVoterId() {
+    try {
+      const saved = localStorage.getItem('voterId');
+      if (saved) return saved;
+    } catch (e) {}
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    const id = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    try { localStorage.setItem('voterId', id); } catch (e) {}
+    return id;
+  }
+  const voterId = getVoterId();
+
+  const socket = io({ auth: { voterId } });
   let currentCode = null;
   let options = [];
   let voted = false;
@@ -343,7 +360,6 @@
     if (voted || !currentCode) return;
     voted = true;
     poll.setAttribute('data-voted', '');
-    localStorage.setItem(`voted_${currentCode}`, '1');
     optsEl.querySelectorAll('.poll-opt').forEach((b) => { b.disabled = true; });
     socket.emit('castVote', { code: currentCode, index });
     burst();
@@ -352,10 +368,9 @@
   socket.on('init', (data) => {
     currentCode = data.code;
     options = data.options;
-    // A code already voted on this browser arrives via joinResults (not
-    // joinPoll), so drop straight into the revealed, disabled results view
-    // instead of letting them vote again.
-    voted = !!localStorage.getItem(`voted_${data.code}`);
+    // The server says whether this browser already voted in the current
+    // round; if so, drop straight into the revealed, disabled results view.
+    voted = data.voted;
     error.textContent = '';
     questionEl.textContent = data.question;
     poll.toggleAttribute('data-voted', voted);
@@ -369,8 +384,20 @@
   });
 
   socket.on('pollError', (msg) => {
+    // The poll may have been deleted while we were away; fall back to the form.
+    currentCode = null;
+    poll.removeAttribute('data-active');
+    form.style.display = '';
     error.textContent = msg;
   });
+
+  // Socket.IO reconnects with a fresh socket that has no rooms, so rejoin the
+  // poll we were on to keep receiving live updates.
+  socket.on('connect', () => {
+    conn.hidden = true;
+    if (currentCode) socket.emit('joinPoll', currentCode);
+  });
+  socket.on('disconnect', () => { conn.hidden = false; });
 
   function attemptJoin(code) {
     if (!/^\d{4}$/.test(code)) {
@@ -379,12 +406,6 @@
       return;
     }
     error.textContent = '';
-    // Already voted on this browser: join as a results viewer so re-visits
-    // don't count as a fresh funnel visit or an abandonment.
-    if (localStorage.getItem(`voted_${code}`)) {
-      socket.emit('joinResults', code);
-      return;
-    }
     socket.emit('joinPoll', code);
   }
 

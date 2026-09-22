@@ -3,6 +3,21 @@
 Bu proje [Keep a Changelog](https://keepachangelog.com/tr/1.0.0/) formatını,
 ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 
+## [Unreleased]
+
+### Düzeltildi
+- **Sunucu tarafında oy sınırı**: Her tarayıcı rastgele bir kimlikle bağlanıyor ve sunucu, aynı kimliğin bir ankette ikinci kez oy vermesini reddediyor. Oy vermek için önce ankete katılmış olmak gerekiyor ve geçersiz seçenek indeksleri reddediliyor. Önceden sınır yalnızca tarayıcıdaki `localStorage` bayrağıydı.
+- **Kaydet oyları silmiyor**: Anketi kaydetmek artık yalnızca seçenekler değiştiyse oyları sıfırlıyor (ve admin panelinde önce onay isteniyor). Soru metnindeki bir düzeltme oyları korur.
+- **Bağlantı kopunca otomatik yeniden katılma**: Oy ekranı ve admin paneli yeniden bağlandığında ankete/admin odasına tekrar katılıyor; bağlantı koptuğunda bir uyarı gösteriliyor.
+- **Sıfırlama sonrası tekrar oy verme**: Oylar sıfırlandığında veya seçenekler değiştiğinde daha önce oy verenler yeniden oy verebiliyor (önceden eski `localStorage` bayrağı yüzünden kilitli kalıyorlardı).
+- **Boş GitHub Release notları**: Yayın iş akışı CHANGELOG bölümünü `v` önekiyle aradığı için hiçbir zaman bulamıyordu; artık doğru bölüm çıkarılıyor.
+
+### Eklendi
+- **Veri kalıcılığı**: Anketler ve oylar `data/polls.json` dosyasına kaydediliyor ve sunucu başlarken geri yükleniyor (`DATA_DIR` ile değiştirilebilir). Docker imajı `/app/data` volume'ü tanımlıyor.
+
+### Değiştirildi
+- Ziyaret sayısı artık tekil tarayıcı başına sayılıyor; sayfa yenileme veya yeniden bağlanma ziyareti ya da "oy vermeden ayrılan" sayısını şişirmiyor. "Oy vermeden ayrılan", oy vermemiş ve şu anda bağlı olmayan ziyaretçileri gösteriyor.
+
 ## [1.4.2] - 2026-08-05
 
 ### Kaldırıldı

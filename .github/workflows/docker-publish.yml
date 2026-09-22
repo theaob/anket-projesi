@@ -63,10 +63,17 @@ jobs:
       - name: Extract Changelog Section
         id: changelog
         run: |
+          # CHANGELOG headings have no "v" prefix ("## [1.4.2] - ..."), so strip it.
+          # index() is a literal match, so the dots in the version aren't regex
+          # wildcards, and the last section (no following heading) is handled too.
           VERSION="${{ steps.pkg.outputs.VERSION }}"
-          # Extract content between the version header and the next header
-          # Uses sed to find the range. Turkish characters are supported by default in UTF-8 environments.
-          sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '1d;$d' > release_notes.md
+          awk -v v="${VERSION#v}" '
+            /^## \[/ { if (found) exit; if (index($0, "## [" v "]") == 1) { found = 1; next } }
+            found
+          ' CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "::warning::CHANGELOG.md has no section for ${VERSION#v}"
+          fi
           echo "notes_file=release_notes.md" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release

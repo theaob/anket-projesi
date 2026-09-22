@@ -25,4 +25,8 @@ Kapalı ağlarda (Intranet) çalışmak üzere tasarlanmış, ultra profesyonel 
 ### Docker ile Kurulum
 ```bash
 docker build -t poll-app .
-docker run -d -p 80:3000 --name poll-system poll-app
+docker run -d -p 80:3000 -v anket-data:/app/data --restart unless-stopped --name poll-system poll-app
+```
+
+### Veri Kalıcılığı
+Anketler ve oylar `data/polls.json` dosyasına kaydedilir (konum `DATA_DIR` ortam değişkeniyle değiştirilebilir) ve sunucu yeniden başlatıldığında geri yüklenir. Docker'da verinin kaybolmaması için yukarıdaki gibi `/app/data` dizinine bir volume bağlayın.

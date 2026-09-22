@@ -199,10 +199,25 @@
             padding: 40px 0;
             font-size: 0.9rem;
         }
+
+        .conn-banner {
+            position: fixed;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ff3d5e;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            z-index: 10;
+        }
     </style>
 </head>
 
 <body>
+    <div class="conn-banner" id="conn" role="status" hidden>Bağlantı koptu, yeniden bağlanılıyor…</div>
     <div class="layout">
         <!-- Left: Poll List -->
         <div class="panel list-panel">
@@ -234,7 +249,13 @@
         let currentCode = null;
         let allPolls = [];
 
-        socket.emit('joinAdmin');
+        // Rejoin on every (re)connect: a new socket has no rooms, so without
+        // this the panel would silently stop receiving updates.
+        socket.on('connect', () => {
+            document.getElementById('conn').hidden = true;
+            socket.emit('joinAdmin');
+        });
+        socket.on('disconnect', () => { document.getElementById('conn').hidden = false; });
 
         socket.on('pollList', (list) => {
             allPolls = list;
@@ -328,6 +349,12 @@
             const options = [...document.querySelectorAll('#options-list .option-row')]
                 .map(row => row.querySelector('input[type="text"]').value.trim())
                 .filter(text => text !== '');
+            // Changing the options resets the votes on the server, so warn first.
+            const poll = allPolls.find(p => p.code === currentCode);
+            const optionsChanged = !poll || poll.options.length !== options.length
+                || poll.options.some((opt, i) => opt !== options[i]);
+            const hasVotes = poll && Object.values(poll.votes || {}).some(n => n > 0);
+            if (optionsChanged && hasVotes && !confirm('Seçenekler değişti; mevcut oylar sıfırlanacak. Devam edilsin mi?')) return;
             socket.emit('updatePoll', { code: currentCode, question, options });
         }
 

@@ -3,6 +3,8 @@
 **Date:** 2026-09-22
 **Scope:** `server.js`, `public/index.html`, `public/admin.html`, `public/style.css`, `Dockerfile`, `.github/workflows/*`, `package.json`, `README.md`, `CHANGELOG.md`
 
+> **Status update:** H1–H5 are fixed. The same change also fixes M2 and M4, fixes most of M3, and closes the specific crash in C1 (see the ✅ notes below). The other critical items (C2–C4) are still open.
+
 Findings marked **(verified)** were reproduced against a running server or checked on GitHub. The others come from reading the code.
 
 ---
@@ -26,6 +28,8 @@ For an app meant to run on a closed intranet, the top priority is the first two 
 `server.js:82` runs `options.map(...)` without checking the input. Emitting `updatePoll` with no `options` array throws `TypeError: Cannot read properties of undefined (reading 'map')`. The exception is uncaught, so Node exits. Because all state is in memory (see H2), **every poll and vote is lost**.
 
 *Reproduced:* `socket.emit('updatePoll', { code, question: 'x' })` → server log shows the TypeError, and `curl localhost:3000` then gets connection refused.
+
+> ✅ **Partly fixed:** `updatePoll` and `castVote` now validate their input, so this crash no longer happens. There is still no general error wrapper around the handlers.
 
 **Fix:**
 - Validate every socket payload: types, array lengths, string lengths, and that `index` is an integer in range.
@@ -61,32 +65,34 @@ Combined with C2, anyone can inject script into the admin's browser.
 
 ## 🟠 High
 
-### H1. Vote limits are enforced only in the browser
+### H1. Vote limits are enforced only in the browser — ✅ fixed
 The one-vote rule lives in `localStorage` in the browser. The server accepts `castVote` from any socket, any number of times, even without a prior `joinPoll` (`server.js:119-126`). A loop in the console, a private window or a different browser can stuff the ballot.
+
+> ✅ Each browser now sends a random voter ID. The server records who has voted per poll and round, rejects second votes and votes from sockets that haven't joined, and checks the option index. **Remaining limit:** someone who writes a script that generates new IDs can still vote more than once. Stopping that needs authentication (see C2) or per-IP limits.
 
 **Fix:**
 - Track voters on the server per poll, by socket or by a signed cookie / device ID, and reject a second vote.
 - Require the socket to have joined that poll.
 - Add a rate limit per connection and per IP.
 
-### H2. All data is in memory only
+### H2. All data is in memory only — ✅ fixed
 A restart, crash (C1), redeploy or container update erases every poll.
 
 **Fix:** save state to a JSON file on a Docker volume (write on change, with a debounce), or use SQLite (`better-sqlite3`). Document the volume in the README.
 
-### H3. "Save" silently wipes the votes and metrics
+### H3. "Save" silently wipes the votes and metrics — ✅ fixed
 `updatePoll` always resets `votes`, `visits` and `abandoned` (`server.js:82-84`), even when the admin only fixes a typo in the question. There is no warning in the UI.
 
 **Fix:** reset only when the options really changed, and ask for confirmation first. Or keep each option's votes by a stable option ID.
 
-### H4. Clients don't recover from a disconnect
+### H4. Clients don't recover from a disconnect — ✅ fixed
 Socket.IO reconnects with a new socket that has no rooms. `index.html` only joins through the form, and `admin.html:237` emits `joinAdmin` once. After a Wi-Fi drop or a server restart, voters and the admin see frozen data with no indication.
 
 **Fix:**
 - Do the join or `joinAdmin` inside `socket.on('connect', ...)`.
 - Show a "connection lost / reconnecting" badge while disconnected.
 
-### H5. GitHub release notes are always empty (verified)
+### H5. GitHub release notes are always empty (verified) — ✅ fixed
 `docker-publish.yml:286` sets `VERSION=v1.4.2`, but the CHANGELOG headings are `## [1.4.2]` without the `v`. The `sed` range never matches, so `release_notes.md` is empty. The v1.4.0, v1.4.1 and v1.4.2 releases on GitHub all have empty bodies.
 
 **Fix:** match on the version without the prefix (`sed -n "/## \[${VERSION#v}\]/,/## \[/p"`). Also escape the dots in the version, and handle the last section, where no next heading follows.
@@ -98,9 +104,9 @@ Socket.IO reconnects with a new socket that has no rooms. `index.html` only join
 | # | Finding | Location | Suggested fix |
 |---|---|---|---|
 | M1 | **CSV formula injection.** An option starting with `=`, `+`, `-` or `@` runs as a formula when the file is opened in Excel. | `server.js:52` | Prefix such cells with `'`. |
-| M2 | **Voters get locked out after a reset or a new question.** The `voted_<code>` flag in `localStorage` is never cleared, so after `resetVotes` or `updatePoll` earlier voters can't vote on the new question. | `index.html:346,358,384` | Give each poll a `version` or `round` ID that changes on reset or edit, and key the flag on `code+round`. |
-| M3 | **Metrics are easy to inflate or skew.** Repeated `joinPoll` calls on one socket count as many visits. A page refresh counts as one abandonment plus one new visit. If a socket joins two polls, only the last one is tracked. | `server.js:105-146` | Count each socket or device once per poll, and ignore a quick reconnect from the same device. |
-| M4 | **Unvalidated vote index.** `index: "constructor"` passes the `!== undefined` check, so a `"constructor": NaN` key is written into `votes`. | `server.js:121` (verified) | Use `Number.isInteger(index) && index >= 0 && index < poll.options.length`, and store votes as an array. |
+| M2 | ✅ fixed — **Voters get locked out after a reset or a new question.** The `voted_<code>` flag in `localStorage` is never cleared, so after `resetVotes` or `updatePoll` earlier voters can't vote on the new question. | `index.html:346,358,384` | Give each poll a `version` or `round` ID that changes on reset or edit, and key the flag on `code+round`. |
+| M3 | ✅ mostly fixed — **Metrics are easy to inflate or skew.** Repeated `joinPoll` calls on one socket count as many visits. A page refresh counts as one abandonment plus one new visit. If a socket joins two polls, only the last one is tracked. | `server.js:105-146` | Count each socket or device once per poll, and ignore a quick reconnect from the same device. |
+| M4 | ✅ fixed — **Unvalidated vote index.** `index: "constructor"` passes the `!== undefined` check, so a `"constructor": NaN` key is written into `votes`. | `server.js:121` (verified) | Use `Number.isInteger(index) && index >= 0 && index < poll.options.length`, and store votes as an array. |
 | M5 | **Every vote sends all polls to all admins.** On each vote the server sends the full list of polls to every admin. With a big audience this floods the network. | `server.js:125` | Throttle to about 4 updates per second, or send only the changed poll. |
 | M6 | **Deleting a poll doesn't notify voters.** Voters stay on a poll that no longer exists. | `server.js:89` | Emit `pollClosed` to the `poll:<code>` room. |
 | M7 | **Docker image hygiene.** `node:18` is end-of-life (April 2025). `npm install --production` is deprecated. There is no lockfile, so builds aren't reproducible. There is no `.dockerignore`, so `COPY . .` also copies `.git`. The container runs as root and has no `HEALTHCHECK`. | `Dockerfile` | Use `node:22-alpine`, commit `package-lock.json` and run `npm ci --omit=dev`, add `.dockerignore`, add `USER node`, and add a `HEALTHCHECK`. |
