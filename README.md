@@ -19,7 +19,7 @@ Kapalı ağlarda (Intranet) çalışmak üzere tasarlanmış, ultra profesyonel 
 
 ### Yerel Kurulum (Geliştirici Modu)
 1. Bağımlılıkları yükleyin: `npm install`
-2. Sunucuyu başlatın: `node server.js`
+2. Sunucuyu başlatın: `node server.js` (Node.js 22.13+)
 3. Tarayıcıda açın: `http://localhost:3000`
 
 ### Docker ile Kurulum
@@ -29,4 +29,8 @@ docker run -d -p 80:3000 -v anket-data:/app/data --restart unless-stopped --name
 ```
 
 ### Veri Kalıcılığı
-Anketler ve oylar `data/polls.json` dosyasına kaydedilir (konum `DATA_DIR` ortam değişkeniyle değiştirilebilir) ve sunucu yeniden başlatıldığında geri yüklenir. Docker'da verinin kaybolmaması için yukarıdaki gibi `/app/data` dizinine bir volume bağlayın.
+Anketler, seçenekler, ziyaretçiler ve oylar bir SQLite veritabanında (`data/anket.db`) saklanır ve sunucu yeniden başlatıldığında geri yüklenir. Konum `DATA_DIR` ortam değişkeniyle değiştirilebilir. Node.js'in yerleşik `node:sqlite` modülü kullanıldığı için ek bir veritabanı sunucusu veya derlenmesi gereken bir paket yoktur; **Node.js 22.13 veya üzeri** gerekir.
+
+Docker'da verinin kaybolmaması için yukarıdaki gibi `/app/data` dizinine bir volume bağlayın. Yedek almak için sunucu çalışırken bile `sqlite3 data/anket.db ".backup yedek.db"` kullanılabilir.
+
+Önceki sürümün `data/polls.json` dosyası varsa, ilk açılışta veritabanına otomatik olarak aktarılır ve dosya `polls.json.imported` olarak yeniden adlandırılır.

@@ -1,10 +1,11 @@
-FROM node:18-alpine
+# Node 22.13+ is required for the built-in node:sqlite module.
+FROM node:22-alpine
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --production
+RUN npm install --omit=dev
 COPY . .
-# Polls are saved to /app/data/polls.json; mount a volume here to keep them
-# across container restarts and image updates.
+# The SQLite database lives in /app/data/anket.db; mount a volume here to keep
+# polls and results across container restarts and image updates.
 RUN mkdir -p /app/data
 VOLUME ["/app/data"]
 EXPOSE 3000

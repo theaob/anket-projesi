@@ -2,8 +2,8 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
-const fs = require('fs');
 const os = require('os');
+const { openDatabase } = require('./db');
 
 const app = express();
 const server = http.createServer(app);
@@ -24,67 +24,20 @@ const VOTER_ID_RE = /^[a-f0-9]{32}$/;
 const polls = new Map();
 
 // ── Persistence ────────────────────────────────────────────────
+// Every change is written straight to SQLite (see db.js); `polls` is the live
+// in-memory copy used for fast reads and broadcasts.
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
-const DATA_FILE = path.join(DATA_DIR, 'polls.json');
+const db = openDatabase(DATA_DIR);
 
 function loadPolls() {
-    let raw;
-    try {
-        raw = fs.readFileSync(DATA_FILE, 'utf8');
-    } catch (err) {
-        if (err.code !== 'ENOENT') console.error('Veri dosyası okunamadı:', err);
-        return;
-    }
-    try {
-        for (const p of JSON.parse(raw)) {
-            polls.set(p.code, {
-                code: p.code,
-                question: p.question,
-                options: p.options,
-                votes: p.votes,
-                visitors: new Map(p.visitors),
-                active: new Map()
-            });
-        }
-        console.log(`📂 ${polls.size} anket yüklendi (${DATA_FILE})`);
-    } catch (err) {
-        console.error('Veri dosyası bozuk, boş başlatılıyor:', err);
-    }
-}
-
-function serializePolls() {
-    return JSON.stringify([...polls.values()].map(p => ({
-        code: p.code,
-        question: p.question,
-        options: p.options,
-        votes: p.votes,
-        visitors: [...p.visitors]
-    })));
-}
-
-let saveTimer = null;
-function scheduleSave() {
-    if (saveTimer) return;
-    saveTimer = setTimeout(() => {
-        saveTimer = null;
-        saveNow();
-    }, 500);
-}
-
-function saveNow() {
-    try {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-        const tmp = DATA_FILE + '.tmp';
-        fs.writeFileSync(tmp, serializePolls());
-        fs.renameSync(tmp, DATA_FILE);
-    } catch (err) {
-        console.error('Veri kaydedilemedi:', err);
-    }
+    const imported = db.importLegacyJson(path.join(DATA_DIR, 'polls.json'));
+    if (imported) console.log(`📥 polls.json dosyasından ${imported} anket veritabanına aktarıldı`);
+    for (const p of db.loadAll()) polls.set(p.code, { ...p, active: new Map() });
+    console.log(`📂 ${polls.size} anket yüklendi (${path.join(DATA_DIR, 'anket.db')})`);
 }
 
 function shutdown() {
-    if (saveTimer) clearTimeout(saveTimer);
-    saveNow();
+    db.close();
     process.exit(0);
 }
 process.on('SIGINT', shutdown);
@@ -192,7 +145,7 @@ app.get('/export', (req, res) => {
     const poll = polls.get(code);
     if (!poll) return res.status(404).send('Anket bulunamadı.');
 
-    let csvContent = "﻿";
+    let csvContent = "\uFEFF";
     csvContent += "Secenek,Oy Sayisi\n";
     poll.options.forEach((opt, i) => {
         const text = String(opt).replace(/"/g, '""');
@@ -221,9 +174,9 @@ io.on('connection', (socket) => {
     socket.on('createPoll', () => {
         const code = generateCode();
         if (!code) return;
+        db.createPoll(code, 'Yeni Anket');
         polls.set(code, { code, question: 'Yeni Anket', options: [], votes: [], visitors: new Map(), active: new Map() });
         notifyAdmins();
-        scheduleSave();
         socket.emit('pollCreated', code);
     });
 
@@ -231,31 +184,37 @@ io.on('connection', (socket) => {
         const poll = polls.get(payload?.code);
         if (!poll || !Array.isArray(payload.options)) return;
         const options = payload.options.map(cleanText).filter(Boolean).slice(0, MAX_OPTIONS);
-        poll.question = cleanText(payload.question);
+        const question = cleanText(payload.question);
         // Only a change to the options invalidates the votes; fixing a typo in
         // the question keeps them.
-        if (!sameOptions(options, poll.options)) {
+        const optionsChanged = !sameOptions(options, poll.options);
+        db.updatePoll(poll.code, question, optionsChanged ? options : null);
+        poll.question = question;
+        if (optionsChanged) {
             poll.options = options;
             resetRound(poll);
         }
         notifyAdmins();
-        scheduleSave();
         sendInitToRoom(poll);
     });
 
     socket.on('deletePoll', (code) => {
+        if (!polls.has(code)) return;
+        db.deletePoll(code);
         polls.delete(code);
         notifyAdmins();
-        scheduleSave();
     });
 
     socket.on('resetVotes', (code) => {
         const poll = polls.get(code);
         if (!poll) return;
+        // Visitors who aren't connected are forgotten, which resets the visit
+        // and "left without voting" counters too.
+        const dropped = [...poll.visitors.keys()].filter(id => !poll.active.get(id));
+        db.resetVotes(code, dropped);
         resetRound(poll);
-        poll.visitors = new Map([...poll.visitors].filter(([id]) => poll.active.get(id)));
+        for (const id of dropped) poll.visitors.delete(id);
         notifyAdmins();
-        scheduleSave();
         sendInitToRoom(poll);
     });
 
@@ -273,8 +232,8 @@ io.on('connection', (socket) => {
             const id = socket.data.voterId;
             poll.active.set(id, (poll.active.get(id) || 0) + 1);
             if (!poll.visitors.has(id)) {
+                db.addVisitor(code, id);
                 poll.visitors.set(id, { voted: false, choice: null });
-                scheduleSave();
             }
         }
         socket.emit('init', voterView(poll, socket.data.voterId));
@@ -292,12 +251,12 @@ io.on('connection', (socket) => {
             socket.emit('init', voterView(poll, socket.data.voterId));
             return;
         }
+        if (!db.castVote(code, socket.data.voterId, index)) return;
         poll.votes[index]++;
         visitor.voted = true;
         visitor.choice = index;
         io.to(`poll:${code}`).emit('updateVotes', poll.votes);
         notifyAdmins();
-        scheduleSave();
     });
 
     socket.on('disconnect', () => {

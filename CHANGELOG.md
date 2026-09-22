@@ -13,9 +13,10 @@ ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 - **Boş GitHub Release notları**: Yayın iş akışı CHANGELOG bölümünü `v` önekiyle aradığı için hiçbir zaman bulamıyordu; artık doğru bölüm çıkarılıyor.
 
 ### Eklendi
-- **Veri kalıcılığı**: Anketler ve oylar `data/polls.json` dosyasına kaydediliyor ve sunucu başlarken geri yükleniyor (`DATA_DIR` ile değiştirilebilir). Docker imajı `/app/data` volume'ü tanımlıyor.
+- **SQLite veritabanı**: Anketler, seçenekler, ziyaretçiler ve oylar `data/anket.db` SQLite veritabanında saklanıyor ve sunucu başlarken geri yükleniyor (`DATA_DIR` ile değiştirilebilir). Her oy, zaman damgasıyla ayrı bir satır olarak kaydediliyor; "kişi başı tek oy" kuralı veritabanı tarafından da uygulanıyor. Node.js'in yerleşik `node:sqlite` modülü kullanıldığından ek bağımlılık yok. Docker imajı `/app/data` volume'ü tanımlıyor. Varsa eski `data/polls.json` dosyası ilk açılışta otomatik olarak aktarılıyor.
 
 ### Değiştirildi
+- Docker imajı Node.js 18'den (desteği sona erdi) Node.js 22'ye yükseltildi; artık Node.js 22.13+ gerekiyor.
 - Ziyaret sayısı artık tekil tarayıcı başına sayılıyor; sayfa yenileme veya yeniden bağlanma ziyareti ya da "oy vermeden ayrılan" sayısını şişirmiyor. "Oy vermeden ayrılan", oy vermemiş ve şu anda bağlı olmayan ziyaretçileri gösteriyor.
 
 ## [1.4.2] - 2026-08-05
