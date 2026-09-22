@@ -1,0 +1,171 @@
+# Project Audit — anket-projesi (v1.4.2)
+
+**Date:** 2026-09-22
+**Scope:** `server.js`, `public/index.html`, `public/admin.html`, `public/style.css`, `Dockerfile`, `.github/workflows/*`, `package.json`, `README.md`, `CHANGELOG.md`
+
+Findings marked **(verified)** were reproduced against a running server or checked on GitHub. The others come from reading the code.
+
+---
+
+## Summary
+
+| Severity | Count | Headline |
+|---|---|---|
+| 🔴 Critical | 4 | One bad socket message crashes the server; no admin auth; stored XSS; code space can run out and hang the server |
+| 🟠 High | 5 | Unlimited votes; data is lost on restart; Save silently wipes votes; no rejoin after reconnect; empty GitHub release notes |
+| 🟡 Medium | 8 | CSV formula injection, lockouts from the stale `voted_` flag, inflated metrics, Docker hardening, and more |
+| 🔵 Low | 9 | Outdated README, config hard-coded in the source, tooling gaps, and minor clean-ups |
+
+For an app meant to run on a closed intranet, the top priority is the first two critical items. Anyone on the network can currently take the server down, or delete and rewrite every poll.
+
+---
+
+## 🔴 Critical
+
+### C1. A malformed `updatePoll` event crashes the whole process (verified)
+`server.js:82` runs `options.map(...)` without checking the input. Emitting `updatePoll` with no `options` array throws `TypeError: Cannot read properties of undefined (reading 'map')`. The exception is uncaught, so Node exits. Because all state is in memory (see H2), **every poll and vote is lost**.
+
+*Reproduced:* `socket.emit('updatePoll', { code, question: 'x' })` → server log shows the TypeError, and `curl localhost:3000` then gets connection refused.
+
+**Fix:**
+- Validate every socket payload: types, array lengths, string lengths, and that `index` is an integer in range.
+- Wrap handlers in a `safe(fn)` helper that catches errors and logs them.
+- Add a `process.on('uncaughtException')` logger as a last resort, and run the container with `--restart unless-stopped`.
+
+### C2. The admin interface has no authentication
+`admin.html` is served publicly, and the server trusts every socket for `joinAdmin`, `createPoll`, `updatePoll`, `deletePoll` and `resetVotes` (`server.js:65-102`). Any voter can open the browser console and delete or rewrite every poll. `joinAdmin` also sends every poll's full data to whoever asks.
+
+**Fix:**
+- Require an `ADMIN_TOKEN` (env var) or a password login.
+- Check it in a Socket.IO namespace middleware, for example `io.of('/admin').use(...)`, and move the admin events into that namespace.
+- Protect `/admin.html` and `/export` with the same check.
+
+### C3. Stored XSS in the voter page and the admin panel
+Poll text written by one user is inserted into other users' pages as raw HTML:
+- `public/index.html:279`: option labels are concatenated into `innerHTML`, so script runs on **every voter's device**.
+- `public/admin.html:281`: `${p.question}` goes into `innerHTML` in the poll list.
+- `public/admin.html:319`: `value="${text}"` lets an option break out of the attribute.
+
+Combined with C2, anyone can inject script into the admin's browser.
+
+**Fix:**
+- Build these elements with `textContent` and `createElement` instead of HTML strings, or escape the text.
+- Add a Content-Security-Policy header that blocks inline script. This requires moving the inline `<script>` blocks into files, which also removes the `onclick=` attributes in `admin.html`.
+
+### C4. `generateCode()` loops forever once all 9000 codes are used
+`server.js:18-24` retries random 4-digit codes until it finds a free one. With 9000 polls there is no free code, and the loop blocks the event loop permanently. `createPoll` has no auth or rate limit, so a script can reach that state in seconds. Each poll also costs memory with no limit.
+
+**Fix:** cap the number of polls or the creation rate, and fail with an error after N attempts. Longer codes (5–6 digits) and removing old polls automatically would also help.
+
+---
+
+## 🟠 High
+
+### H1. Vote limits are enforced only in the browser
+The one-vote rule lives in `localStorage` in the browser. The server accepts `castVote` from any socket, any number of times, even without a prior `joinPoll` (`server.js:119-126`). A loop in the console, a private window or a different browser can stuff the ballot.
+
+**Fix:**
+- Track voters on the server per poll, by socket or by a signed cookie / device ID, and reject a second vote.
+- Require the socket to have joined that poll.
+- Add a rate limit per connection and per IP.
+
+### H2. All data is in memory only
+A restart, crash (C1), redeploy or container update erases every poll.
+
+**Fix:** save state to a JSON file on a Docker volume (write on change, with a debounce), or use SQLite (`better-sqlite3`). Document the volume in the README.
+
+### H3. "Save" silently wipes the votes and metrics
+`updatePoll` always resets `votes`, `visits` and `abandoned` (`server.js:82-84`), even when the admin only fixes a typo in the question. There is no warning in the UI.
+
+**Fix:** reset only when the options really changed, and ask for confirmation first. Or keep each option's votes by a stable option ID.
+
+### H4. Clients don't recover from a disconnect
+Socket.IO reconnects with a new socket that has no rooms. `index.html` only joins through the form, and `admin.html:237` emits `joinAdmin` once. After a Wi-Fi drop or a server restart, voters and the admin see frozen data with no indication.
+
+**Fix:**
+- Do the join or `joinAdmin` inside `socket.on('connect', ...)`.
+- Show a "connection lost / reconnecting" badge while disconnected.
+
+### H5. GitHub release notes are always empty (verified)
+`docker-publish.yml:286` sets `VERSION=v1.4.2`, but the CHANGELOG headings are `## [1.4.2]` without the `v`. The `sed` range never matches, so `release_notes.md` is empty. The v1.4.0, v1.4.1 and v1.4.2 releases on GitHub all have empty bodies.
+
+**Fix:** match on the version without the prefix (`sed -n "/## \[${VERSION#v}\]/,/## \[/p"`). Also escape the dots in the version, and handle the last section, where no next heading follows.
+
+---
+
+## 🟡 Medium
+
+| # | Finding | Location | Suggested fix |
+|---|---|---|---|
+| M1 | **CSV formula injection.** An option starting with `=`, `+`, `-` or `@` runs as a formula when the file is opened in Excel. | `server.js:52` | Prefix such cells with `'`. |
+| M2 | **Voters get locked out after a reset or a new question.** The `voted_<code>` flag in `localStorage` is never cleared, so after `resetVotes` or `updatePoll` earlier voters can't vote on the new question. | `index.html:346,358,384` | Give each poll a `version` or `round` ID that changes on reset or edit, and key the flag on `code+round`. |
+| M3 | **Metrics are easy to inflate or skew.** Repeated `joinPoll` calls on one socket count as many visits. A page refresh counts as one abandonment plus one new visit. If a socket joins two polls, only the last one is tracked. | `server.js:105-146` | Count each socket or device once per poll, and ignore a quick reconnect from the same device. |
+| M4 | **Unvalidated vote index.** `index: "constructor"` passes the `!== undefined` check, so a `"constructor": NaN` key is written into `votes`. | `server.js:121` (verified) | Use `Number.isInteger(index) && index >= 0 && index < poll.options.length`, and store votes as an array. |
+| M5 | **Every vote sends all polls to all admins.** On each vote the server sends the full list of polls to every admin. With a big audience this floods the network. | `server.js:125` | Throttle to about 4 updates per second, or send only the changed poll. |
+| M6 | **Deleting a poll doesn't notify voters.** Voters stay on a poll that no longer exists. | `server.js:89` | Emit `pollClosed` to the `poll:<code>` room. |
+| M7 | **Docker image hygiene.** `node:18` is end-of-life (April 2025). `npm install --production` is deprecated. There is no lockfile, so builds aren't reproducible. There is no `.dockerignore`, so `COPY . .` also copies `.git`. The container runs as root and has no `HEALTHCHECK`. | `Dockerfile` | Use `node:22-alpine`, commit `package-lock.json` and run `npm ci --omit=dev`, add `.dockerignore`, add `USER node`, and add a `HEALTHCHECK`. |
+| M8 | **Workflow issues.** `auto-tag.yml` uses `actions/checkout@v3`, which runs on a deprecated Node version. The build job gets `contents: write` when it only needs read access. No workflow runs checks on PRs. | `.github/workflows/*` | Upgrade to `@v4`, give each job the least permissions it needs, and add a CI workflow (see L4). |
+
+---
+
+## 🔵 Low
+
+- **L1. The README is out of date.** It advertises "Weighted Scoring" (removed in 1.2.0) and a results screen that no longer exists. It doesn't mention poll codes, the `?code=` link or metrics. The "Mentimeter Clone" wording may raise trademark concerns.
+- **L2. Port and bind address are hard-coded.** `PORT = 3000` (`server.js:41`) should read `process.env.PORT`. `getLocalIp()` returns the first non-internal interface, which in Docker is the container IP, so the printed URL is misleading.
+- **L3. No `.gitignore`.** `node_modules/` can be committed by accident.
+- **L4. No tests, linting or formatting.** Add ESLint and Prettier, plus a few `node:test` + `socket.io-client` integration tests for create, vote, reset and export, and for the validation cases above. Run them in CI on PRs.
+- **L5. `package.json` gaps.** Add `"private": true` and `"engines": { "node": ">=20" }`, and make the `name` match the repo. The `release:*` scripts push `HEAD` from whatever branch is checked out; add a guard that only allows `main`.
+- **L6. The title animation never stops.** Two `requestAnimationFrame` loops in `index.html` run forever, even when the tab is in the background or the card is showing results. This drains battery on phones. Pause them on `visibilitychange` or once a poll is shown.
+- **L7. Code structure.** All voter JS and CSS is inline in `index.html` (406 lines), while `style.css` is used only by the admin page. Moving them into files helps with CSP (C3), caching and maintenance.
+- **L8. `localStorage` access isn't guarded.** It can throw (for example in some private-browsing modes or when storage is blocked), which would break voting. Wrap it in `try/catch`.
+- **L9. Accessibility.** Add a visible focus style to the option buttons, announce the result percentages to screen readers (`aria-label` on each bar), and check colour contrast on the gradient title.
+
+---
+
+## Suggested fix order
+
+1. **C1, M4:** input validation and a safe wrapper for all handlers. Small change, stops the crashes.
+2. **C3:** remove unsafe `innerHTML` use.
+3. **C2:** admin token.
+4. **C4, H1:** rate limits and a server-side vote check.
+5. **H4, H3, M2:** reconnect handling and safe editing.
+6. **H2:** persistence.
+7. **H5, M7, M8, L4:** release, Docker and CI fixes.
+8. The remaining medium and low items.
+
+---
+
+## Suggested features
+
+### Poll types and content
+- **More question types:** multiple choice (pick N), word cloud / open text, rating scale (1–5 or NPS), ranking, and Q&A with upvotes.
+- **Multi-question sessions:** a presentation made of several slides that the presenter steps through, with voters following along automatically.
+- **Images and emoji in options.**
+- **Poll templates:** duplicate an existing poll, or import and export polls as JSON.
+
+### Presenter experience
+- **Presenter / projector view:** a full-screen, large-type live results page (bar, pie or word cloud) for the room screen. The CHANGELOG shows a results page existed before 1.4.2.
+- **QR code and join link:** show `http://<host>/?code=1234` as a QR code in the admin and presenter views. Render it on the server so it also works offline.
+- **Open / close voting:** a start/stop toggle, an optional countdown timer, and "hide results until closed" to avoid bandwagon voting.
+- **Live participant count:** how many people are connected, plus a votes-per-minute sparkline.
+- **Keyboard shortcuts** for presenting: next question, show or hide results, and so on.
+
+### Admin and data
+- **Admin login** with roles, and polls owned by their creator.
+- **Persistent history:** archived polls, results over time, and comparisons between sessions.
+- **Richer export:** XLSX and PDF summaries with charts, timestamps per vote, and the funnel metrics in one sheet.
+- **Poll expiry and cleanup:** delete polls automatically after N days.
+- **Audit log:** who created, edited, reset or deleted what, and when.
+
+### Voter experience
+- **Change vote** before the poll closes, if the admin allows it.
+- **Anonymous nickname or reactions:** live emoji reactions that float on the presenter screen.
+- **PWA / offline shell:** an installable app with a clear screen when the connection is lost.
+- **Language toggle:** Turkish and English; strings are currently hard-coded in Turkish.
+- **Dark mode**, following `prefers-color-scheme`.
+
+### Operations
+- **`/healthz` endpoint and Prometheus `/metrics`.**
+- **Configuration through environment variables:** port, admin token, data directory, poll limits.
+- **docker-compose.yml** with a data volume and restart policy, for one-command intranet deployment.
+- **Scaling across instances** with the Socket.IO Redis adapter, for events with many concurrent voters.
