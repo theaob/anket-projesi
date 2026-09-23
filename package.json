@@ -4,6 +4,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "test": "node --test --test-concurrency=1 --disable-warning=ExperimentalWarning \"test/**/*.test.js\"",
     "release:patch": "npm version patch && git push origin HEAD --tags",
     "release:minor": "npm version minor && git push origin HEAD --tags",
     "release:major": "npm version major && git push origin HEAD --tags"
@@ -16,5 +17,8 @@
   },
   "engines": {
     "node": ">=22.13"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
   }
 }

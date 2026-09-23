@@ -3,6 +3,21 @@
 Bu proje [Keep a Changelog](https://keepachangelog.com/tr/1.0.0/) formatını,
 ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 
+## [Unreleased]
+
+### Güvenlik
+- **CSV formül enjeksiyonu**: Dışa aktarılan dosyada `=`, `+`, `-` veya `@` ile başlayan seçenek metinleri artık başına `'` eklenerek yazılıyor; Excel bunları formül olarak çalıştırmıyor.
+- **Docker imajı yetkisiz kullanıcıyla çalışıyor**: Sunucu artık `root` yerine `node` kullanıcısıyla çalışıyor. v2.0.0 ile oluşturulmuş veri volume'lerinin sahipliği açılışta otomatik olarak düzeltiliyor.
+
+### Eklendi
+- **Otomatik testler ve CI**: Sunucu için entegrasyon testleri (`npm test`; kimlik doğrulama, tek oy, oylama aç/kapat, CSV, dayanıklılık, kalıcılık, hız sınırları). GitHub Actions'ta her push ve pull request'te testler çalışıyor ve Docker imajı derlenip duman testinden geçiriliyor.
+- **`/healthz` ve Docker `HEALTHCHECK`**.
+- **`PORT` ortam değişkeni** (varsayılan `3000`).
+
+### Değiştirildi
+- Docker derlemesi `package-lock.json` ile `npm ci` kullanıyor; bağımlılık sürümleri artık sabit.
+- GitHub Actions: `actions/checkout` v5'e yükseltildi; yayın iş akışında yalnızca sürüm oluşturan iş yazma yetkisine sahip.
+
 ## [2.0.0] - 2026-09-23
 
 ### ⚠️ Yükseltme notları

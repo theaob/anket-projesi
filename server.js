@@ -110,6 +110,9 @@ app.post('/api/voter', express.json({ limit: '4kb' }), async (req, res) => {
     }
 });
 
+// Liveness check for Docker's HEALTHCHECK and load balancers.
+app.get('/healthz', (req, res) => res.type('text').send('ok'));
+
 // The shared admin panel was replaced by per-poll manage links.
 app.get('/admin.html', (req, res) => res.redirect('/'));
 app.get('/manage', (req, res) => res.sendFile(path.join(__dirname, 'public', 'manage.html'), {
@@ -354,12 +357,20 @@ function leavePoll(socket) {
     return poll;
 }
 
+// A quoted CSV cell. Text starting with = + - @ (or a tab/carriage return) is
+// prefixed with an apostrophe so spreadsheets show it instead of running it
+// as a formula; option text is written by whoever created the poll.
+function csvCell(value) {
+    let text = String(value);
+    if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+    return `"${text.replace(/"/g, '""')}"`;
+}
+
 function buildCsv(poll) {
     let csvContent = "\uFEFF";
     csvContent += "Secenek,Oy Sayisi\n";
     poll.options.forEach((opt, i) => {
-        const text = String(opt).replace(/"/g, '""');
-        csvContent += `"${text}",${poll.votes[i] || 0}\n`;
+        csvContent += `${csvCell(opt)},${poll.votes[i] || 0}\n`;
     });
     csvContent += `\nZiyaret,${poll.visitors.size}\n`;
     csvContent += `Oy Vermeden Ayrilan,${abandonedCount(poll)}\n`;
@@ -378,7 +389,7 @@ const getLocalIp = () => {
 };
 
 const localIp = getLocalIp();
-const PORT = 3000;
+const PORT = envInt('PORT', 3000);
 // Base address put in join links and QR codes. Set PUBLIC_URL when the
 // server is reached through a proxy or a DNS name (e.g. http://anket.firma.local).
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
@@ -592,5 +603,5 @@ io.on('connection', (socket) => {
 loadPolls();
 
 server.listen(PORT, () => {
-    console.log(`🚀 Sunucu Hazır: http://${localIp}:${PORT}`);
+    console.log(`🚀 Sunucu Hazır: ${PUBLIC_URL || `http://${localIp}:${PORT}`}`);
 });
