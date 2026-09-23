@@ -191,7 +191,7 @@ describe('robustness', () => {
         const junk = [undefined, null, 0, 1e308, '', 'x'.repeat(5000), [], {}, { code: {} },
             { code, options: [{}, 5, null] }, { code, index: 1.5 }, true];
         for (const event of ['createPoll', 'manage', 'updatePoll', 'deletePoll', 'resetVotes', 'setVoting',
-            'exportCsv', 'joinPoll', 'watchPoll', 'castVote']) {
+            'exportCsv', 'joinPoll', 'watchPoll', 'castVote', 'react']) {
             for (const payload of junk) { s.emit(event, payload); s.emit(event, payload, payload); }
         }
         await wait(500);
@@ -321,5 +321,55 @@ describe('live updates', () => {
         assert.equal(counted.abandoned, 1);
         assert.equal(counted.visits, 2);
         back.socket.close();
+    });
+});
+
+describe('reactions', () => {
+    let server;
+    before(async () => { server = await startServer(); });
+    after(() => server.stop());
+
+    it('sends reactions to voters and presenter screens in batches', async () => {
+        const { owner, code } = await createPoll(server.url);
+        const presenter = await connect(server.url);
+        const { reactions } = await call(presenter, 'watchPoll', code);
+        assert.ok(reactions.length >= 2);
+        const alice = await joinAsVoter(server.url, code, (await voterCookie(server.url)).cookie);
+        const bob = await joinAsVoter(server.url, code, (await voterCookie(server.url)).cookie);
+        assert.deepEqual(alice.poll.reactions, reactions);
+
+        const seen = [];
+        presenter.on('reactions', (counts) => seen.push(counts));
+        const bobSeen = [];
+        bob.socket.on('reactions', (counts) => bobSeen.push(counts));
+        const replies = [];
+        for (let i = 0; i < 5; i++) replies.push(await call(alice.socket, 'react', { code, reaction: 1 }));
+        replies.push(await call(bob.socket, 'react', { code, reaction: 0 }));
+        await wait(700);
+
+        assert.ok(replies.every((r) => r.ok));
+        const total = (list) => list.reduce((sum, counts) => counts.map((n, i) => n + (sum[i] || 0)), []);
+        assert.equal(total(seen)[1], 5);
+        assert.equal(total(seen)[0], 1);
+        assert.deepEqual(total(bobSeen), total(seen));
+        assert.ok(seen.length < 6, `expected batching, got ${seen.length} messages`);
+        owner.close(); presenter.close(); alice.socket.close(); bob.socket.close();
+    });
+
+    it('rejects invalid reactions, outsiders and floods', async () => {
+        const { owner, code } = await createPoll(server.url);
+        const outsider = await connect(server.url, { cookie: (await voterCookie(server.url)).cookie });
+        assert.equal((await call(outsider, 'react', { code, reaction: 0 })).ok, false);
+
+        const { socket } = await joinAsVoter(server.url, code, (await voterCookie(server.url)).cookie);
+        for (const reaction of [-1, 99, 1.5, '0', null]) {
+            assert.equal((await call(socket, 'react', { code, reaction })).ok, false);
+        }
+        const results = [];
+        for (let i = 0; i < 20; i++) results.push((await call(socket, 'react', { code, reaction: 0 })).ok);
+        // A burst of 10, plus at most one refilled while the loop ran.
+        const accepted = results.filter(Boolean).length;
+        assert.ok(accepted >= 10 && accepted <= 11, `accepted ${accepted}`);
+        owner.close(); outsider.close(); socket.close();
     });
 });

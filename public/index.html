@@ -93,6 +93,17 @@
   .poll-opt .pct { color: #7e22ce; display: none; font-feature-settings: "tnum" 1; }
   .poll[data-voted] .fill, .poll[data-voted] .pct { display: revert; }
   .poll-foot { margin: 14px 0 0; font-size: 13px; font-weight: 600; color: #6b6880; }
+  /* Live reactions, offered once the results are showing. */
+  .reactions { display: none; margin-top: 18px; padding-top: 16px; border-top: 2px dashed #ece9f7; }
+  .poll[data-voted] .reactions { display: block; }
+  .reactions p { margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6880; }
+  .reaction-row { display: grid; grid-template-columns: repeat(6, minmax(0, 48px)); justify-content: space-between; gap: 6px; }
+  .reaction-row button { width: 100%; aspect-ratio: 1; border: none; border-radius: 50%; background: #f4f3f9; cursor: pointer;
+    font-size: 24px; line-height: 1; padding: 0; transition: transform .2s cubic-bezier(.34,1.56,.64,1), background .2s ease;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .reaction-row button:hover { background: #ede8ff; transform: translateY(-2px) scale(1.08); }
+  .reaction-row button:active { transform: scale(.88); }
+  .reaction-row button:focus-visible { outline: 3px solid #7e22ce; outline-offset: 2px; }
   .conn { margin: 16px 0 0; font-size: 13px; font-weight: 600; color: #c81e45; }
   .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
@@ -116,7 +127,7 @@
   /* Honour the system "reduce motion" setting for every effect on the page. */
   @media (prefers-reduced-motion: reduce) {
     .blob, .digit-box.pop, .poll[data-active], .poll-live::before { animation: none; }
-    .poll-opt .fill, .btn-join, .btn-create, .poll-opt, .digit-box { transition: none; }
+    .poll-opt .fill, .btn-join, .btn-create, .poll-opt, .digit-box, .reaction-row button { transition: none; }
   }
 </style>
 </head>
@@ -156,6 +167,10 @@
     <span class="poll-live" id="poll-live">Canlı</span>
     <div class="poll-options" id="poll-options"></div>
     <p class="poll-foot" id="poll-foot"></p>
+    <div class="reactions" role="group" aria-labelledby="reactions-title">
+      <p id="reactions-title">Tepki gönder</p>
+      <div class="reaction-row" id="reaction-row"></div>
+    </div>
   </div>
   <p class="conn" id="conn" role="status" hidden>Bağlantı koptu, yeniden bağlanılıyor…</p>
   <!-- Announces events (vote recorded, voting closed) to screen readers. -->

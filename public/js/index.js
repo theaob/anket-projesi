@@ -453,6 +453,62 @@
     announce('Oyunuz kaydedildi. Sonuçlar gösteriliyor.');
   }
 
+  // ── Live reactions ────────────────────────────────────────
+  // Once results are showing, voters can send emoji reactions. Everyone's
+  // reactions float up here and on the presenter screen. The server sends
+  // them in batches, as a count per reaction.
+  const REACTION_NAMES = { '👍': 'Beğendim', '❤️': 'Bayıldım', '😂': 'Komik', '😮': 'Şaşırdım', '👏': 'Alkış', '🤔': 'Düşündürücü' };
+  const reactionRow = document.getElementById('reaction-row');
+  let reactions = [];
+  // Our own reactions float up as soon as they're tapped. Until the server's
+  // next batch (which includes them) arrives, they're counted here so that
+  // they aren't shown a second time.
+  let unechoed = [];
+
+  function buildReactions(list) {
+    if (reactions.length === list.length && reactions.every((r, i) => r === list[i])) return;
+    reactions = list.slice();
+    unechoed = list.map(() => 0);
+    reactionRow.replaceChildren(...list.map((emoji, i) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = emoji;
+      btn.title = REACTION_NAMES[emoji] || emoji;
+      btn.setAttribute('aria-label', btn.title);
+      btn.addEventListener('click', () => react(i, btn));
+      return btn;
+    }));
+  }
+
+  function react(i, btn) {
+    if (!currentCode) return;
+    const r = btn.getBoundingClientRect();
+    Motion.floatEmoji(reactions[i], { x: r.left + r.width / 2, y: r.top, size: 32, rise: 240 });
+    unechoed[i]++;
+    socket.emit('react', { code: currentCode, reaction: i }, (res) => {
+      if (!res?.ok) unechoed[i] = Math.max(0, unechoed[i] - 1);
+    });
+  }
+
+  socket.on('reactions', (counts) => {
+    if (!Array.isArray(counts)) return;
+    // Not before voting: other people's reactions could sway the vote.
+    const show = revealed();
+    const r = reactionRow.getBoundingClientRect();
+    counts.forEach((count, i) => {
+      const own = Math.min(unechoed[i] || 0, count);
+      unechoed[i] -= own;
+      if (!show || !reactions[i]) return;
+      // A batch can hold many of the same reaction; a handful already reads
+      // as "lots", spread out over the batch interval.
+      for (let k = 0; k < Math.min(count - own, 6); k++) {
+        setTimeout(() => Motion.floatEmoji(reactions[i], {
+          x: r.left + Math.random() * r.width, y: r.top, size: 22 + Math.random() * 10, rise: 180 + Math.random() * 80
+        }), Math.random() * 300);
+      }
+    });
+  });
+
   socket.on('init', (data) => {
     // Voting closed by the owner (not by our own countdown reaching zero,
     // which announces itself): tell screen-reader users.
@@ -466,6 +522,7 @@
     error.textContent = '';
     questionEl.textContent = data.question;
     renderOptions(data.votes || {});
+    buildReactions(data.reactions || []);
     votingTimer.set(data.voting);
     if (!poll.hasAttribute('data-active')) {
       // Cross-fade from the code form to the poll. Keyboard and screen-reader
@@ -498,6 +555,8 @@
   // poll we were on to keep receiving live updates.
   socket.on('connect', () => {
     conn.hidden = true;
+    // Replies to reactions sent before the connection dropped never come.
+    unechoed = unechoed.map(() => 0);
     if (currentCode) socket.emit('joinPoll', currentCode);
   });
   socket.on('disconnect', () => { conn.hidden = false; });

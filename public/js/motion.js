@@ -39,5 +39,39 @@
     else change();
   }
 
-  window.Motion = { tweenNumber, setNumber, transition, get reduced() { return reducedMotion.matches; } };
+  // Floats an emoji up from (x, y), in viewport pixels, drifting sideways and
+  // fading out. With reduced motion it fades in and out where it starts.
+  // Past MAX_FLOATING on screen, new ones are dropped: a flood of reactions
+  // still looks busy, but can't pile up thousands of elements.
+  const MAX_FLOATING = 60;
+  let floating = 0;
+  function floatEmoji(emoji, { x, y, size = 28, rise = 200, duration = 2000 }) {
+    if (floating >= MAX_FLOATING) return;
+    const el = document.createElement('span');
+    el.className = 'float-emoji';
+    el.textContent = emoji;
+    el.setAttribute('aria-hidden', 'true');
+    el.style.cssText = `position:fixed;left:${x}px;top:${y}px;font-size:${size}px;line-height:1;`
+      + 'pointer-events:none;z-index:999;will-change:transform,opacity;transform:translate(-50%,-50%);opacity:0';
+    document.body.appendChild(el);
+    floating++;
+    const frames = reducedMotion.matches
+      ? [{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }]
+      : (() => {
+        const drift = (Math.random() - 0.5) * 80;
+        const tilt = (Math.random() - 0.5) * 40;
+        const at = (p, opacity, scale) => ({
+          transform: `translate(calc(-50% + ${(drift * p + Math.sin(p * Math.PI * 2) * 12).toFixed(1)}px), `
+            + `calc(-50% - ${(rise * p).toFixed(1)}px)) rotate(${(tilt * p).toFixed(1)}deg) scale(${scale})`,
+          opacity, offset: p
+        });
+        return [at(0, 0, 0.4), at(0.12, 1, 1.15), at(0.25, 1, 1), at(0.7, 1, 1), at(1, 0, 0.9)];
+      })();
+    el.animate(frames, { duration, easing: 'cubic-bezier(.3,.6,.4,1)' }).onfinish = () => {
+      el.remove();
+      floating--;
+    };
+  }
+
+  window.Motion = { tweenNumber, setNumber, transition, floatEmoji, get reduced() { return reducedMotion.matches; } };
 })();
