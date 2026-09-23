@@ -5,6 +5,8 @@ and [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-09-23
+
 ### Changed
 - **The app is now English only.** Every page, message, confirmation dialog and screen-reader announcement, the presenter view, the PDF report, the exports and the server logs are in English, and dates and numbers use English formatting (e.g. `Sep 24, 8:42 PM`, `57%`, `1d 4h`). Polls and their content are not changed.
   - Export files are now named `poll_<code>_<date>.xlsx|csv|json`, and their sheets, headers and labels are in English.
