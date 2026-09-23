@@ -77,13 +77,13 @@ const excelDate = (ms, tzOffset) => (ms === null ? null : localMs(ms, tzOffset) 
 const isoText = (ms) => (ms === null ? null : new Date(ms).toISOString());
 
 function votingText(voting) {
-    if (voting.phase === 'closed') return 'Kapalı';
-    if (voting.phase === 'scheduled') return 'Planlandı (henüz başlamadı)';
-    return voting.closesAt ? 'Açık (bitiş zamanı var)' : 'Açık';
+    if (voting.phase === 'closed') return 'Closed';
+    if (voting.phase === 'scheduled') return 'Scheduled (not started yet)';
+    return voting.closesAt ? 'Open (with an end time)' : 'Open';
 }
 
 function fileName(report, ext) {
-    return `anket_${report.code}_${localText(report.exportedAt, report.tzOffset).slice(0, 10)}.${ext}`;
+    return `poll_${report.code}_${localText(report.exportedAt, report.tzOffset).slice(0, 10)}.${ext}`;
 }
 
 // ── Excel ──────────────────────────────────────────────────────
@@ -93,53 +93,53 @@ function toXlsx(report) {
     const f = report.funnel;
 
     const summary = {
-        name: 'Özet',
+        name: 'Summary',
         cols: [26, 60],
         rows: [
-            [{ v: 'Anket raporu', style: 'title' }],
+            [{ v: 'Poll report', style: 'title' }],
             [],
-            [{ v: 'Soru', style: 'bold' }, report.question],
-            [{ v: 'Anket kodu', style: 'bold' }, report.code],
-            [{ v: 'Oluşturulma', style: 'bold' }, date(report.createdAt)],
-            [{ v: 'Rapor tarihi', style: 'bold' }, date(report.exportedAt)],
-            [{ v: 'Oylama', style: 'bold' }, votingText(report.voting)],
-            ...(report.voting.opensAt ? [[{ v: 'Başlangıç', style: 'bold' }, date(report.voting.opensAt)]] : []),
-            ...(report.voting.closesAt ? [[{ v: 'Bitiş', style: 'bold' }, date(report.voting.closesAt)]] : []),
+            [{ v: 'Question', style: 'bold' }, report.question],
+            [{ v: 'Poll code', style: 'bold' }, report.code],
+            [{ v: 'Created', style: 'bold' }, date(report.createdAt)],
+            [{ v: 'Report date', style: 'bold' }, date(report.exportedAt)],
+            [{ v: 'Voting', style: 'bold' }, votingText(report.voting)],
+            ...(report.voting.opensAt ? [[{ v: 'Start', style: 'bold' }, date(report.voting.opensAt)]] : []),
+            ...(report.voting.closesAt ? [[{ v: 'End', style: 'bold' }, date(report.voting.closesAt)]] : []),
             [],
-            [{ v: 'Katılım', style: 'header' }, { v: '', style: 'header' }],
-            ['Ziyaretçi', f.visitors],
-            ['Oy veren', f.voted],
-            ['Oy vermeden ayrılan', f.abandoned],
-            ['Şu an bağlı', f.connected],
-            ['Katılım oranı (oy veren / ziyaretçi)', f.participation === null ? '—' : { v: f.participation, style: 'percent' }],
-            ['İlk oy', report.firstVoteAt === null ? '—' : date(report.firstVoteAt)],
-            ['Son oy', report.lastVoteAt === null ? '—' : date(report.lastVoteAt)],
+            [{ v: 'Participation', style: 'header' }, { v: '', style: 'header' }],
+            ['Visitors', f.visitors],
+            ['Voted', f.voted],
+            ['Left without voting', f.abandoned],
+            ['Connected now', f.connected],
+            ['Participation rate (voted / visitors)', f.participation === null ? '—' : { v: f.participation, style: 'percent' }],
+            ['First vote', report.firstVoteAt === null ? '—' : date(report.firstVoteAt)],
+            ['Last vote', report.lastVoteAt === null ? '—' : date(report.lastVoteAt)],
             [],
-            ['Saatler, raporu indiren cihazın saat dilimindedir.']
+            ['Times are in the time zone of the device that downloaded the report.']
         ]
     };
 
     const n = report.options.length;
     const results = {
-        name: 'Sonuçlar',
+        name: 'Results',
         cols: [40, 10, 10],
         rows: [
-            [{ v: 'Seçenek', style: 'header' }, { v: 'Oy', style: 'header' }, { v: 'Yüzde', style: 'header' }],
+            [{ v: 'Option', style: 'header' }, { v: 'Votes', style: 'header' }, { v: 'Share', style: 'header' }],
             ...report.options.map(o => [o.text, o.votes, { v: o.share, style: 'percent' }]),
-            [{ v: 'Toplam', style: 'bold' }, { v: report.totalVotes, style: 'bold' }, { v: report.totalVotes ? 1 : 0, style: 'percent' }]
+            [{ v: 'Total', style: 'bold' }, { v: report.totalVotes, style: 'bold' }, { v: report.totalVotes ? 1 : 0, style: 'percent' }]
         ],
         charts: n ? [{
-            title: 'Oy dağılımı', dir: 'bar', labels: true,
+            title: 'Votes by option', dir: 'bar', labels: true,
             cats: { col: 0, from: 1, to: n }, vals: { col: 1, from: 1, to: n },
             at: { col: 4, row: 1, cols: 8, rows: Math.max(12, n * 2 + 4) }
         }] : []
     };
 
     const voteSheet = {
-        name: 'Oylar',
+        name: 'Votes',
         cols: [8, 22, 40],
         rows: [
-            [{ v: '#', style: 'header' }, { v: 'Zaman', style: 'header' }, { v: 'Seçenek', style: 'header' }],
+            [{ v: '#', style: 'header' }, { v: 'Time', style: 'header' }, { v: 'Option', style: 'header' }],
             ...report.votes.map((v, i) => [i + 1, date(v.at), report.options[v.option].text])
         ]
     };
@@ -148,15 +148,15 @@ function toXlsx(report) {
     const withDay = buckets.length > 0
         && localText(buckets[0].start, tz).slice(0, 10) !== localText(buckets[buckets.length - 1].start, tz).slice(0, 10);
     const timeSheet = {
-        name: 'Zaman',
+        name: 'Timeline',
         cols: [22, 12, 16],
         rows: [
-            [{ v: `Aralık başlangıcı (${report.timeline.bucketMinutes ?? '—'} dk)`, style: 'header' },
-                { v: 'Oy', style: 'header' }, { v: 'Toplam oy', style: 'header' }],
+            [{ v: `Interval start (${report.timeline.bucketMinutes ?? '—'} min)`, style: 'header' },
+                { v: 'Votes', style: 'header' }, { v: 'Total votes', style: 'header' }],
             ...buckets.map(b => [date(b.start), b.votes, b.cumulative])
         ],
         charts: buckets.length ? [{
-            title: 'Zamana göre oylar', dir: 'col', dateFormat: withDay ? 'dd.mm hh:mm' : 'hh:mm',
+            title: 'Votes over time', dir: 'col', dateFormat: withDay ? 'mmm d hh:mm' : 'hh:mm',
             cats: { col: 0, from: 1, to: buckets.length }, vals: { col: 1, from: 1, to: buckets.length },
             at: { col: 4, row: 1, cols: 10, rows: 16 }
         }] : []
@@ -181,27 +181,27 @@ function toCsv(report) {
     const f = report.funnel;
     const pct = (share) => Math.round(share * 1000) / 10;
     const lines = [
-        ['Soru', report.question],
-        ['Anket kodu', report.code],
-        ['Rapor tarihi', localText(report.exportedAt, tz)],
-        ['Oylama', votingText(report.voting)],
-        ...(report.voting.opensAt ? [['Başlangıç', localText(report.voting.opensAt, tz)]] : []),
-        ...(report.voting.closesAt ? [['Bitiş', localText(report.voting.closesAt, tz)]] : []),
+        ['Question', report.question],
+        ['Poll code', report.code],
+        ['Report date', localText(report.exportedAt, tz)],
+        ['Voting', votingText(report.voting)],
+        ...(report.voting.opensAt ? [['Start', localText(report.voting.opensAt, tz)]] : []),
+        ...(report.voting.closesAt ? [['End', localText(report.voting.closesAt, tz)]] : []),
         [],
-        ['Seçenek', 'Oy', 'Yüzde'],
+        ['Option', 'Votes', 'Share (%)'],
         ...report.options.map(o => [o.text, o.votes, pct(o.share)]),
-        ['Toplam', report.totalVotes, report.totalVotes ? 100 : 0],
+        ['Total', report.totalVotes, report.totalVotes ? 100 : 0],
         [],
-        ['Ziyaretçi', f.visitors],
-        ['Oy veren', f.voted],
-        ['Oy vermeden ayrılan', f.abandoned],
-        ['Şu an bağlı', f.connected],
-        ['Katılım oranı (%)', f.participation === null ? '' : pct(f.participation)],
+        ['Visitors', f.visitors],
+        ['Voted', f.voted],
+        ['Left without voting', f.abandoned],
+        ['Connected now', f.connected],
+        ['Participation rate (%)', f.participation === null ? '' : pct(f.participation)],
         [],
-        ['Zaman', 'Seçenek'],
+        ['Time', 'Option'],
         ...report.votes.map(v => [localText(v.at, tz), report.options[v.option].text])
     ];
-    // BOM so Excel reads the file as UTF-8 (Turkish characters).
+    // BOM so Excel reads the file as UTF-8 (accented characters, emoji).
     return '\uFEFF' + lines.map(cells => cells.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
 
@@ -218,7 +218,7 @@ function toJson(report) {
         results: {
             code: report.code,
             createdAt: isoText(report.createdAt),
-            voting: votingText(report.voting),
+            voting: report.voting.phase,
             opensAt: isoText(report.voting.opensAt ?? null),
             closesAt: isoText(report.voting.closesAt ?? null),
             options: report.options.map(o => ({ text: o.text, votes: o.votes })),

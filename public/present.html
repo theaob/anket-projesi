@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Sunum Ekranı</title>
+<title>Presenter View</title>
 <script src="/socket.io/socket.io.js"></script>
 <style>
   * { box-sizing: border-box; }
@@ -138,28 +138,28 @@
     <h1 class="question" id="question"></h1>
     <div class="options" id="options"></div>
     <div class="footer">
-      <span class="live" id="live">Canlı</span>
-      <span><strong id="votes">0</strong> oy</span>
-      <span><strong id="participants">0</strong> katılımcı bağlı</span>
-      <span class="hidden-note">Sonuçlar gizli</span>
+      <span class="live" id="live">Live</span>
+      <span><strong id="votes">0</strong> <span id="votes-label">votes</span></span>
+      <span><strong id="participants">0</strong> <span id="participants-label">participants connected</span></span>
+      <span class="hidden-note">Results hidden</span>
       <div class="controls" id="controls">
-        <button type="button" id="btn-hide">Sonuçları gizle<kbd>H</kbd></button>
-        <button type="button" id="btn-full">Tam ekran<kbd>F</kbd></button>
+        <button type="button" id="btn-hide">Hide results<kbd>H</kbd></button>
+        <button type="button" id="btn-full">Full screen<kbd>F</kbd></button>
       </div>
     </div>
   </section>
 
   <aside class="join">
-    <div class="countdown" id="countdown" role="timer" hidden><small id="countdown-label">Kalan süre</small><span id="countdown-text"></span></div>
-    <h2 id="join-title">Katılmak için tarayın</h2>
-    <img class="qr" id="qr" alt="Ankete katılım QR kodu" />
+    <div class="countdown" id="countdown" role="timer" hidden><small id="countdown-label">Time left</small><span id="countdown-text"></span></div>
+    <h2 id="join-title">Scan to join</h2>
+    <img class="qr" id="qr" alt="QR code to join the poll" />
     <p class="url" id="join-url"></p>
-    <p class="or">veya kodu girin</p>
+    <p class="or">or enter the code</p>
     <div class="code" id="code"></div>
   </aside>
 </main>
 
-<p class="conn" id="conn" role="status" hidden>Bağlantı koptu, yeniden bağlanılıyor…</p>
+<p class="conn" id="conn" role="status" hidden>Connection lost, reconnecting…</p>
 
 <script src="/js/motion.js"></script>
 <script src="/js/voting-timer.js"></script>

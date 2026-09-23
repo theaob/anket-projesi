@@ -43,7 +43,7 @@ async function startServer(env = {}) {
         await new Promise((resolve, reject) => {
             const timer = setTimeout(() => reject(new Error(`server did not start:\n${output}`)), 10000);
             child.stdout.on('data', () => {
-                if (output.includes('Sunucu Hazır')) { clearTimeout(timer); resolve(); }
+                if (output.includes('Server ready')) { clearTimeout(timer); resolve(); }
             });
             child.on('exit', (code) => { clearTimeout(timer); reject(new Error(`server exited (${code}):\n${output}`)); });
         });

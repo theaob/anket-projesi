@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Anketi Yönet</title>
+    <title>Manage Poll</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
     <style>
@@ -364,88 +364,88 @@
 </head>
 
 <body>
-    <div class="conn-banner" id="conn" role="status" hidden>Bağlantı koptu, yeniden bağlanılıyor…</div>
+    <div class="conn-banner" id="conn" role="status" hidden>Connection lost, reconnecting…</div>
 
     <main class="panel">
-        <a class="home-link" href="/">← Ana sayfa</a>
-        <h1 class="page-title">Anketi Yönet</h1>
+        <a class="home-link" href="/">← Home</a>
+        <h1 class="page-title">Manage Poll</h1>
 
         <div id="error" class="error-box" hidden></div>
 
         <div id="editor" hidden>
-            <h2>Anket Kodu</h2>
+            <h2>Poll Code</h2>
             <div class="code-badge" id="code"></div>
-            <a class="present-link" id="present-link" target="_blank" rel="noopener">🖥 Sunum ekranını aç</a>
+            <a class="present-link" id="present-link" target="_blank" rel="noopener">🖥 Open presenter view</a>
 
-            <label class="hint" for="share-link">Katılımcılar bu bağlantıyı açabilir ya da kodu ana sayfada girebilir:</label>
+            <label class="hint" for="share-link">Participants can open this link or enter the code on the home page:</label>
             <div class="link-row">
                 <input type="text" id="share-link" readonly>
-                <button type="button" data-copy="share-link">Kopyala</button>
+                <button type="button" data-copy="share-link">Copy</button>
             </div>
 
-            <label class="hint" for="manage-link">Yönetim bağlantısı:</label>
+            <label class="hint" for="manage-link">Manage link:</label>
             <div class="link-row">
                 <input type="text" id="manage-link" readonly>
-                <button type="button" data-copy="manage-link">Kopyala</button>
+                <button type="button" data-copy="manage-link">Copy</button>
             </div>
-            <p class="hint warn">Bu bağlantıyı saklayın: anketi yönetmenin tek yolu budur ve kaybolursa geri alınamaz.
-                Bağlantıya sahip olan herkes anketi düzenleyebilir veya silebilir.</p>
+            <p class="hint warn">Keep this link safe: it is the only way to manage the poll and can't be recovered if lost.
+                Anyone with the link can edit or delete the poll.</p>
 
-            <h2>Oylama</h2>
+            <h2>Voting</h2>
             <div class="voting-status" id="voting-status" role="status"></div>
             <button type="button" id="btn-voting"></button>
             <div class="timer-row" id="timer-presets">
-                <span>Süreli başlat:</span>
-                <button type="button" data-seconds="30">30 sn</button>
-                <button type="button" data-seconds="60">1 dk</button>
-                <button type="button" data-seconds="120">2 dk</button>
-                <button type="button" data-seconds="300">5 dk</button>
+                <span>Start with a timer:</span>
+                <button type="button" data-seconds="30">30 sec</button>
+                <button type="button" data-seconds="60">1 min</button>
+                <button type="button" data-seconds="120">2 min</button>
+                <button type="button" data-seconds="300">5 min</button>
             </div>
             <div class="timer-row" id="timer-running" hidden>
-                <span>Süre işliyor:</span>
-                <button type="button" id="btn-extend">+30 sn</button>
-                <button type="button" id="btn-untimed">Süreyi kaldır (açık kalsın)</button>
+                <span>Timer running:</span>
+                <button type="button" id="btn-extend">+30 sec</button>
+                <button type="button" id="btn-untimed">Remove timer (keep open)</button>
             </div>
 
             <form class="schedule" id="schedule-form" novalidate>
-                <p class="schedule-title">Tarih ve saatle planla</p>
+                <p class="schedule-title">Schedule by date and time</p>
                 <div class="schedule-row">
-                    <label>Başlangıç<input type="datetime-local" id="sched-start" aria-describedby="schedule-help"></label>
-                    <label>Bitiş<input type="datetime-local" id="sched-end" aria-describedby="schedule-help"></label>
+                    <label>Start<input type="datetime-local" id="sched-start" aria-describedby="schedule-help"></label>
+                    <label>End<input type="datetime-local" id="sched-end" aria-describedby="schedule-help"></label>
                 </div>
-                <span class="hint" id="schedule-help">Başlangıç boşsa oylama hemen açılır; bitiş boşsa siz kapatana kadar açık kalır. Saatler bu cihazın saat dilimindedir.</span>
-                <button type="submit" id="btn-schedule">Planı kaydet</button>
+                <span class="hint" id="schedule-help">With no start, voting opens now; with no end, it stays open until you close it. Times are in this device's time zone.</span>
+                <button type="submit" id="btn-schedule">Save schedule</button>
                 <p class="hint" id="schedule-status" role="status"></p>
             </form>
 
-            <h2>Sonuçlar</h2>
+            <h2>Results</h2>
             <div class="stats-row" id="stats"></div>
             <div id="results"></div>
 
-            <h2>Dışa aktar</h2>
+            <h2>Export</h2>
             <div class="export-grid">
-                <button type="button" class="btn-export" data-export="xlsx">Excel<small>Özet, grafikler, oy saatleri</small></button>
-                <a class="btn-export" id="report-link" target="_blank" rel="noopener">PDF raporu<small>Yazdırılabilir özet</small></a>
-                <button type="button" class="btn-export" data-export="csv">CSV<small>Düz tablo</small></button>
-                <button type="button" class="btn-export" data-export="json">JSON<small>Soru, seçenekler ve sonuçlar</small></button>
+                <button type="button" class="btn-export" data-export="xlsx">Excel<small>Summary, charts, vote times</small></button>
+                <a class="btn-export" id="report-link" target="_blank" rel="noopener">PDF report<small>Printable summary</small></a>
+                <button type="button" class="btn-export" data-export="csv">CSV<small>Plain table</small></button>
+                <button type="button" class="btn-export" data-export="json">JSON<small>Question, options and results</small></button>
             </div>
             <p class="hint" id="export-status" role="status"></p>
 
-            <h2>Düzenle</h2>
-            <input type="text" id="question" placeholder="Soru nedir?" maxlength="200" aria-label="Soru">
+            <h2>Edit</h2>
+            <input type="text" id="question" placeholder="What's the question?" maxlength="200" aria-label="Question">
             <div id="options-list"></div>
-            <button type="button" class="btn-add" id="btn-add">+ Seçenek Ekle</button>
-            <button type="button" id="btn-save">✔ Yayınla</button>
+            <button type="button" class="btn-add" id="btn-add">+ Add Option</button>
+            <button type="button" id="btn-save">✔ Publish</button>
             <div class="btn-row">
-                <button type="button" class="btn-secondary" id="btn-import">JSON'dan yükle</button>
-                <button type="button" class="btn-secondary" id="btn-duplicate">Kopyasını oluştur</button>
+                <button type="button" class="btn-secondary" id="btn-import">Load from JSON</button>
+                <button type="button" class="btn-secondary" id="btn-duplicate">Duplicate poll</button>
             </div>
             <input type="file" id="import-file" accept=".json,application/json" hidden>
             <p class="hint" id="import-status" role="status"></p>
 
             <div class="btn-row">
-                <button type="button" class="btn-reset" id="btn-reset">Oyları Sıfırla</button>
-                <button type="button" class="btn-delete" id="btn-delete">Anketi Sil</button>
+                <button type="button" class="btn-reset" id="btn-reset">Reset Votes</button>
+                <button type="button" class="btn-delete" id="btn-delete">Delete Poll</button>
             </div>
         </div>
     </main>

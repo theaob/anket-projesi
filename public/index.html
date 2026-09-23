@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Oy Ver</title>
+<title>Vote</title>
 <script src="/socket.io/socket.io.js"></script>
 <style>
   * { box-sizing: border-box; }
@@ -142,7 +142,7 @@
 <div class="blob blob-a" aria-hidden="true"></div>
 <div class="blob blob-b" aria-hidden="true"></div>
 <main class="card">
-  <h1 class="title" id="title" aria-label="Ankete Katıl"></h1>
+  <h1 class="title" id="title" aria-label="Join a Poll"></h1>
 
   <form id="join-form" novalidate>
     <div class="field">
@@ -153,19 +153,19 @@
         <div class="digit-box"></div>
         <div class="digit-box" hidden></div>
       </div>
-      <input class="code-input" id="join-code" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="5" autocomplete="off" aria-describedby="join-error" aria-label="Anket kodu" />
+      <input class="code-input" id="join-code" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="5" autocomplete="off" aria-describedby="join-error" aria-label="Poll code" />
     </div>
     <p class="error" id="join-error" role="alert"></p>
     <div class="turnstile" id="turnstile" hidden></div>
-    <button type="submit" class="btn-join">Katıl</button>
+    <button type="submit" class="btn-join">Join</button>
 
     <div class="create">
-      <button type="button" class="btn-create" id="btn-create">+ Yeni anket oluştur</button>
-      <button type="button" class="btn-import" id="btn-import">veya JSON dosyasından içe aktar</button>
+      <button type="button" class="btn-create" id="btn-create">+ Create a new poll</button>
+      <button type="button" class="btn-import" id="btn-import">or import from a JSON file</button>
       <input type="file" id="import-file" accept=".json,application/json" hidden>
       <p class="error" id="create-error" role="alert"></p>
       <div class="my-polls" id="my-polls" hidden>
-        <h2>Bu tarayıcıda oluşturduğun anketler</h2>
+        <h2>Polls you created in this browser</h2>
         <ul id="my-polls-list"></ul>
       </div>
     </div>
@@ -173,15 +173,15 @@
 
   <div class="poll" id="poll">
     <p class="poll-q" id="poll-q" tabindex="-1"></p>
-    <span class="poll-live" id="poll-live">Canlı</span>
+    <span class="poll-live" id="poll-live">Live</span>
     <div class="poll-options" id="poll-options"></div>
     <p class="poll-foot" id="poll-foot"></p>
     <div class="reactions" role="group" aria-labelledby="reactions-title">
-      <p id="reactions-title">Tepki gönder</p>
+      <p id="reactions-title">Send a reaction</p>
       <div class="reaction-row" id="reaction-row"></div>
     </div>
   </div>
-  <p class="conn" id="conn" role="status" hidden>Bağlantı koptu, yeniden bağlanılıyor…</p>
+  <p class="conn" id="conn" role="status" hidden>Connection lost, reconnecting…</p>
   <!-- Announces events (vote recorded, voting closed) to screen readers. -->
   <p class="sr-only" id="sr-status" role="status"></p>
 </main>

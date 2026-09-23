@@ -319,7 +319,7 @@ describe('exports', () => {
     it('neutralises spreadsheet formulas in CSV option text', async () => {
         const { owner, code } = await createPoll(server.url, 'Q', ['=HYPERLINK("http://x","y")', '+1', '-2', '@SUM(A1)', 'normal "quoted"']);
         const { data: csv, filename, mime } = await call(owner, 'exportPoll', { code, format: 'csv' });
-        assert.match(filename, new RegExp(`^anket_${code}_\\d{4}-\\d{2}-\\d{2}\\.csv$`));
+        assert.match(filename, new RegExp(`^poll_${code}_\\d{4}-\\d{2}-\\d{2}\\.csv$`));
         assert.match(mime, /^text\/csv/);
         assert.match(csv, /^\uFEFF/);
         assert.ok(csv.includes(`"'=HYPERLINK(""http://x"",""y"")",0,0`));
@@ -334,7 +334,7 @@ describe('exports', () => {
         const { owner, code } = await pollWithVotes(['A', 'B'], [1, 0, 1]);
         const { data: csv } = await call(owner, 'exportPoll', { code, format: 'csv', tzOffset: -180 });
         assert.ok(csv.includes('"B",2,66.7'));
-        assert.ok(csv.includes('"Oy veren",3'));
+        assert.ok(csv.includes('"Voted",3'));
         const times = [...csv.matchAll(/"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})","[AB]"/g)].map(m => m[1]);
         assert.equal(times.length, 3);
         // UTC+3: the written time is three hours ahead of UTC.
@@ -348,7 +348,7 @@ describe('exports', () => {
         const res = await call(owner, 'exportPoll', { code, format: 'xlsx' });
         assert.match(res.filename, /\.xlsx$/);
         const files = unzip(Buffer.from(res.data));
-        assert.match(files['xl/workbook.xml'], /name="Özet".*name="Sonuçlar".*name="Oylar".*name="Zaman"/);
+        assert.match(files['xl/workbook.xml'], /name="Summary".*name="Results".*name="Votes".*name="Timeline"/);
         const results = files['xl/worksheets/sheet2.xml'];
         assert.ok(results.includes('<t xml:space="preserve">Hayır &lt;&amp;&gt;</t>'));
         assert.ok(results.includes('<c r="B2"><v>2</v></c>'));
