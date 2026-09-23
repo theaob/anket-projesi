@@ -154,7 +154,9 @@ const voterIdLimiter = createLimiter_({ burst: VOTER_ID_BURST, perHour: VOTER_ID
 //         visitors: Map<voterId, { voted: boolean, choice: number|null }>,
 //         closed: boolean, closesAt: number|null  (timer deadline, ms),
 //         active: Map<voterId, number>  (live socket count, not persisted),
-//         timer  (pending auto-close timeout, not persisted) }
+//         leftAt: Map<voterId, ms>  (when their last socket closed, not persisted),
+//         timer  (pending auto-close timeout, not persisted),
+//         update: { timer, pending, votesChanged }  (live-update batching) }
 const polls = new Map();
 
 // ── Persistence ────────────────────────────────────────────────
@@ -260,10 +262,17 @@ function hashSecret(secret) {
     return crypto.createHash('sha256').update(secret).digest('hex');
 }
 
+// A visitor only counts as "left without voting" once they have been gone
+// this long, so a page reload or a brief network drop doesn't show up there.
+const LEFT_GRACE_MS = 10 * 1000;
+
 function abandonedCount(poll) {
+    const now = Date.now();
     let n = 0;
     for (const [id, v] of poll.visitors) {
-        if (!v.voted && !poll.active.get(id)) n++;
+        if (v.voted || poll.active.get(id)) continue;
+        const leftAt = poll.leftAt?.get(id);
+        if (leftAt === undefined || now - leftAt >= LEFT_GRACE_MS) n++;
     }
     return n;
 }
@@ -306,15 +315,39 @@ function publicView(poll) {
     };
 }
 
-// Pushes a poll's latest state to its managers and presenter screens.
-function notifyOwners(poll) {
+// Live updates (vote counts for voters who see results, stats for managers
+// and presenter screens) are sent at most every UPDATE_INTERVAL_MS per poll.
+// Sending one per vote to everyone would grow with the square of the audience.
+// The first change goes out at once; later ones within the interval are
+// merged into one update carrying the latest state, so none are lost.
+const UPDATE_INTERVAL_MS = 250;
+
+function scheduleUpdate(poll, { votesChanged = false } = {}) {
+    poll.update ??= { timer: null, pending: false, votesChanged: false };
+    poll.update.pending = true;
+    if (votesChanged) poll.update.votesChanged = true;
+    if (!poll.update.timer) flushUpdate(poll);
+}
+
+function flushUpdate(poll) {
+    const u = poll.update;
+    if (!u.pending || polls.get(poll.code) !== poll) {
+        u.timer = null;
+        return;
+    }
+    u.pending = false;
+    if (u.votesChanged) {
+        u.votesChanged = false;
+        io.to(`poll:${poll.code}`).emit('updateVotes', poll.votes);
+    }
     io.to(`manage:${poll.code}`).emit('managePoll', ownerView(poll));
     io.to(`watch:${poll.code}`).emit('watchPoll', publicView(poll));
+    u.timer = setTimeout(() => flushUpdate(poll), UPDATE_INTERVAL_MS);
 }
 
 // Everyone watching a poll: managers, presenter screens and voters.
 function notifyAll(poll) {
-    notifyOwners(poll);
+    scheduleUpdate(poll);
     sendInitToRoom(poll);
 }
 
@@ -352,8 +385,17 @@ function leavePoll(socket) {
     if (!poll) return null;
     const id = socket.data.voterId;
     const n = (poll.active.get(id) || 0) - 1;
-    if (n > 0) poll.active.set(id, n);
-    else poll.active.delete(id);
+    if (n > 0) {
+        poll.active.set(id, n);
+    } else {
+        poll.active.delete(id);
+        // Refresh the managers' "left without voting" count once the grace
+        // period is over, if the visitor hasn't come back by then.
+        (poll.leftAt ??= new Map()).set(id, Date.now());
+        setTimeout(() => {
+            if (polls.get(poll.code) === poll) scheduleUpdate(poll);
+        }, LEFT_GRACE_MS + 50).unref();
+    }
     return poll;
 }
 
@@ -481,7 +523,7 @@ io.on('connection', (socket) => {
             poll.options = options;
             resetRound(poll);
         }
-        notifyOwners(poll);
+        scheduleUpdate(poll);
         sendInitToRoom(poll);
     });
 
@@ -490,6 +532,7 @@ io.on('connection', (socket) => {
         if (!poll) return;
         db.deletePoll(code);
         clearTimeout(poll.timer);
+        clearTimeout(poll.update?.timer);
         polls.delete(code);
         io.to(`poll:${code}`).emit('pollError', 'Bu anket silindi.');
         io.in(`poll:${code}`).socketsLeave(`poll:${code}`);
@@ -508,7 +551,7 @@ io.on('connection', (socket) => {
         db.resetVotes(code, dropped);
         resetRound(poll);
         for (const id of dropped) poll.visitors.delete(id);
-        notifyOwners(poll);
+        scheduleUpdate(poll);
         sendInitToRoom(poll);
     });
 
@@ -566,13 +609,14 @@ io.on('connection', (socket) => {
                 poll.visitors.set(id, { voted: false, choice: null });
             }
             const previous = leavePoll(socket);
-            if (previous) notifyOwners(previous);
+            if (previous) scheduleUpdate(previous);
             socket.join(`poll:${code}`);
             socket.data.pollCode = code;
             poll.active.set(id, (poll.active.get(id) || 0) + 1);
+            poll.leftAt?.delete(id);
         }
         socket.emit('init', voterView(poll, socket.data.voterId));
-        notifyOwners(poll);
+        scheduleUpdate(poll);
     });
 
     on('castVote', (payload) => {
@@ -590,13 +634,12 @@ io.on('connection', (socket) => {
         poll.votes[index]++;
         visitor.voted = true;
         visitor.choice = index;
-        io.to(`poll:${code}`).emit('updateVotes', poll.votes);
-        notifyOwners(poll);
+        scheduleUpdate(poll, { votesChanged: true });
     });
 
     on('disconnect', () => {
         const poll = leavePoll(socket);
-        if (poll) notifyOwners(poll);
+        if (poll) scheduleUpdate(poll);
     });
 });
 
