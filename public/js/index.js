@@ -162,15 +162,39 @@
   let currentCode = null;
   let options = [];
   let voted = false;
+  let votingOpen = true;
+  let lastVotes = [];
+  const liveEl = document.getElementById('poll-live');
 
   function totalVotes(votes) {
     return Object.values(votes || {}).reduce((a, b) => a + b, 0);
   }
 
+  // Results are shown once this browser has voted, or to everyone once
+  // voting has closed.
+  function revealed() {
+    return voted || !votingOpen;
+  }
+
+  // Status next to the question: live (with the countdown when a timer is
+  // running) or closed. Closing when the countdown hits zero locally locks
+  // the options straight away instead of waiting for the server's message.
+  const votingTimer = VotingTimer.create(({ open, remainingMs, text }) => {
+    liveEl.classList.toggle('closed', !open);
+    liveEl.classList.toggle('urgent', open && remainingMs !== null && remainingMs <= 10000);
+    liveEl.textContent = !open ? 'Oylama kapandı' : text ? `Canlı · ${text}` : 'Canlı';
+    if (votingOpen && !open) {
+      votingOpen = false;
+      poll.toggleAttribute('data-voted', true);
+      renderOptions(lastVotes);
+    }
+  });
+
   // Renders the option buttons. Fill bars always start at width:0% here; when
-  // `voted` is true a follow-up frame bumps them to the real percentage so the
-  // CSS width transition actually has something to animate from.
+  // results are revealed a follow-up frame bumps them to the real percentage
+  // so the CSS width transition actually has something to animate from.
   function renderOptions(votes) {
+    lastVotes = votes;
     const t = totalVotes(votes);
     // Built with DOM APIs, never HTML strings: option labels are written by
     // whoever created the poll and must not be able to inject markup.
@@ -180,7 +204,7 @@
       btn.type = 'button';
       btn.className = 'poll-opt';
       btn.dataset.i = i;
-      btn.disabled = voted;
+      btn.disabled = revealed();
       const fill = document.createElement('span');
       fill.className = 'fill';
       fill.style.width = '0%';
@@ -198,7 +222,7 @@
     }));
     foot.textContent = t.toLocaleString('tr-TR') + ' oy verildi';
 
-    if (!voted) {
+    if (!revealed()) {
       optsEl.querySelectorAll('.poll-opt').forEach((btn) => {
         btn.addEventListener('click', () => castVote(Number(btn.dataset.i), btn));
       });
@@ -258,7 +282,7 @@
   }
 
   function castVote(index) {
-    if (voted || !currentCode) return;
+    if (voted || !votingOpen || !currentCode) return;
     voted = true;
     poll.setAttribute('data-voted', '');
     optsEl.querySelectorAll('.poll-opt').forEach((b) => { b.disabled = true; });
@@ -272,16 +296,18 @@
     // The server says whether this browser already voted in the current
     // round; if so, drop straight into the revealed, disabled results view.
     voted = data.voted;
+    votingOpen = data.voting.open;
     error.textContent = '';
     questionEl.textContent = data.question;
-    poll.toggleAttribute('data-voted', voted);
+    poll.toggleAttribute('data-voted', revealed());
     renderOptions(data.votes || {});
+    votingTimer.set(data.voting);
     poll.setAttribute('data-active', '');
     form.style.display = 'none';
   });
 
   socket.on('updateVotes', (votes) => {
-    if (voted) renderOptions(votes);
+    if (revealed()) renderOptions(votes);
   });
 
   socket.on('pollError', (msg) => {

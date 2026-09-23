@@ -72,6 +72,16 @@
   .qr { display: block; width: 100%; max-width: min(26vw, 58vh); aspect-ratio: 1; margin: 0 auto; image-rendering: pixelated; }
   .url { margin: clamp(10px, 1.6vh, 18px) 0 0; font-size: clamp(13px, 1.1vw, 20px); font-weight: 600; color: var(--muted); overflow-wrap: anywhere; }
   .or { margin: clamp(12px, 2vh, 22px) 0 4px; font-size: clamp(13px, 1vw, 18px); color: var(--muted); font-weight: 600; }
+  .countdown { margin: 0 0 clamp(10px, 1.6vh, 18px); font-weight: 900; line-height: 1; font-feature-settings: "tnum" 1;
+    font-size: clamp(40px, 5vw, 96px); color: var(--ink); }
+  .countdown small { display: block; margin-bottom: 6px; font-size: clamp(12px, 0.9vw, 16px); font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .1em; }
+  .countdown.urgent { color: #ff3d5e; animation: tick 1s ease-in-out infinite; }
+  @keyframes tick { 50% { transform: scale(1.06); } }
+  .voting-closed .qr, .voting-closed .url, .voting-closed .or, .voting-closed .code { opacity: .25; filter: grayscale(1); }
+  .voting-closed .join h2 { color: #ff3d5e; }
+  .voting-closed .live { color: var(--muted); }
+  .voting-closed .live::before { background: #c9c7d6; animation: none; }
   .code { font-weight: 900; font-size: clamp(40px, 5vw, 92px); letter-spacing: .12em; line-height: 1; font-feature-settings: "tnum" 1;
     background: var(--brand); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
@@ -99,10 +109,11 @@
     .join { order: -1; display: grid; grid-template-columns: auto 1fr; gap: 4px 20px; align-items: center; text-align: left; }
     .join h2 { grid-column: 1 / -1; }
     .qr { grid-row: span 3; width: min(36vw, 200px); }
+    .countdown { grid-column: 1 / -1; }
     .url, .or { margin: 0; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .fill { transition: none; } .live::before, .bump { animation: none; }
+    .fill { transition: none; } .live::before, .bump, .countdown.urgent { animation: none; }
   }
 </style>
 </head>
@@ -122,7 +133,7 @@
     <h1 class="question" id="question"></h1>
     <div class="options" id="options"></div>
     <div class="footer">
-      <span class="live">Canlı</span>
+      <span class="live" id="live">Canlı</span>
       <span><strong id="votes">0</strong> oy</span>
       <span><strong id="participants">0</strong> katılımcı bağlı</span>
       <span class="hidden-note">Sonuçlar gizli</span>
@@ -130,7 +141,8 @@
   </section>
 
   <aside class="join">
-    <h2>Katılmak için tarayın</h2>
+    <div class="countdown" id="countdown" role="timer" hidden><small>Kalan süre</small><span id="countdown-text"></span></div>
+    <h2 id="join-title">Katılmak için tarayın</h2>
     <img class="qr" id="qr" alt="Ankete katılım QR kodu" />
     <p class="url" id="join-url"></p>
     <p class="or">veya kodu girin</p>
@@ -140,6 +152,7 @@
 
 <p class="conn" id="conn" role="status" hidden>Bağlantı koptu, yeniden bağlanılıyor…</p>
 
+<script src="/js/voting-timer.js"></script>
 <script src="/js/present.js"></script>
 </body>
 </html>

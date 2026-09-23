@@ -74,7 +74,9 @@ const CREATE_WINDOW_MS = 60 * 60 * 1000;
 // polls: Map<code: string, poll>
 // poll: { code, question, options: string[], votes: number[],
 //         visitors: Map<voterId, { voted: boolean, choice: number|null }>,
-//         active: Map<voterId, number>  (live socket count, not persisted) }
+//         closed: boolean, closesAt: number|null  (timer deadline, ms),
+//         active: Map<voterId, number>  (live socket count, not persisted),
+//         timer  (pending auto-close timeout, not persisted) }
 const polls = new Map();
 
 // ── Persistence ────────────────────────────────────────────────
@@ -84,7 +86,16 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const db = openDatabase(DATA_DIR);
 
 function loadPolls() {
-    for (const p of db.loadAll()) polls.set(p.code, { ...p, active: new Map() });
+    for (const p of db.loadAll()) {
+        const poll = { ...p, active: new Map(), timer: null };
+        polls.set(p.code, poll);
+        // A timer that ran out while the server was down closes the poll now;
+        // one still running carries on.
+        if (poll.closesAt && !poll.closed) {
+            if (poll.closesAt <= Date.now()) closeVoting(poll);
+            else scheduleClose(poll);
+        }
+    }
     console.log(`📂 ${polls.size} anket yüklendi (${path.join(DATA_DIR, 'anket.db')})`);
 }
 
@@ -121,6 +132,47 @@ function generateCode() {
     return null;
 }
 
+// ── Open/close voting ──────────────────────────────────────────
+const MIN_TIMER_SEC = 5;
+const MAX_TIMER_SEC = 60 * 60;
+
+function isOpen(poll) {
+    return !poll.closed && !(poll.closesAt && Date.now() >= poll.closesAt);
+}
+
+// Sent to every client; the remaining time rather than the deadline, so a
+// device whose clock is wrong still counts down correctly.
+function votingView(poll) {
+    const open = isOpen(poll);
+    return { open, remainingMs: open && poll.closesAt ? poll.closesAt - Date.now() : null };
+}
+
+function scheduleClose(poll) {
+    clearTimeout(poll.timer);
+    poll.timer = null;
+    if (poll.closed || !poll.closesAt) return;
+    poll.timer = setTimeout(() => {
+        try {
+            closeVoting(poll);
+            notifyAll(poll);
+        } catch (err) {
+            console.error('Oylama zamanlayıcısı kapatılamadı:', err);
+        }
+    }, Math.max(0, poll.closesAt - Date.now()));
+}
+
+// Database first, then memory, like every other change.
+function setVoting(poll, closed, closesAt) {
+    db.setVoting(poll.code, closed, closesAt);
+    poll.closed = closed;
+    poll.closesAt = closesAt;
+    scheduleClose(poll);
+}
+
+function closeVoting(poll) {
+    setVoting(poll, true, null);
+}
+
 // The manage secret is only ever shown to the poll's creator; the database
 // keeps its hash so a copy of the database file can't be used to take over
 // polls.
@@ -143,7 +195,8 @@ function ownerView(poll) {
         options: poll.options,
         votes: poll.votes,
         visits: poll.visitors.size,
-        abandoned: abandonedCount(poll)
+        abandoned: abandonedCount(poll),
+        voting: votingView(poll)
     };
 }
 
@@ -155,7 +208,8 @@ function voterView(poll, voterId) {
         options: poll.options,
         votes: poll.votes,
         voted: !!visitor?.voted,
-        choice: visitor?.choice ?? null
+        choice: visitor?.choice ?? null,
+        voting: votingView(poll)
     };
 }
 
@@ -167,7 +221,8 @@ function publicView(poll) {
         question: poll.question,
         options: poll.options,
         votes: poll.votes,
-        participants: poll.active.size
+        participants: poll.active.size,
+        voting: votingView(poll)
     };
 }
 
@@ -175,6 +230,12 @@ function publicView(poll) {
 function notifyOwners(poll) {
     io.to(`manage:${poll.code}`).emit('managePoll', ownerView(poll));
     io.to(`watch:${poll.code}`).emit('watchPoll', publicView(poll));
+}
+
+// Everyone watching a poll: managers, presenter screens and voters.
+function notifyAll(poll) {
+    notifyOwners(poll);
+    sendInitToRoom(poll);
 }
 
 // Every voter gets their own `voted` flag, so a plain room broadcast won't do.
@@ -298,7 +359,10 @@ io.on('connection', (socket) => {
         if (!code) return reply(ack, { error: 'Şu anda boş anket kodu yok, lütfen daha sonra tekrar deneyin.' });
         const secret = crypto.randomBytes(24).toString('base64url');
         db.createPoll(code, 'Yeni Anket', hashSecret(secret));
-        polls.set(code, { code, question: 'Yeni Anket', options: [], votes: [], visitors: new Map(), active: new Map() });
+        polls.set(code, {
+            code, question: 'Yeni Anket', options: [], votes: [], visitors: new Map(),
+            closed: false, closesAt: null, active: new Map(), timer: null
+        });
         reply(ack, { code, secret });
     });
 
@@ -336,6 +400,7 @@ io.on('connection', (socket) => {
         const poll = ownedPoll(code);
         if (!poll) return;
         db.deletePoll(code);
+        clearTimeout(poll.timer);
         polls.delete(code);
         io.to(`poll:${code}`).emit('pollError', 'Bu anket silindi.');
         io.in(`poll:${code}`).socketsLeave(`poll:${code}`);
@@ -356,6 +421,24 @@ io.on('connection', (socket) => {
         for (const id of dropped) poll.visitors.delete(id);
         notifyOwners(poll);
         sendInitToRoom(poll);
+    });
+
+    // Opens or closes voting. With `seconds`, voting opens (or stays open)
+    // and closes automatically when the timer runs out; starting a timer
+    // while one is running replaces it.
+    on('setVoting', (payload) => {
+        const poll = ownedPoll(payload?.code);
+        if (!poll) return;
+        if (payload.open !== true) {
+            closeVoting(poll);
+        } else if (payload.seconds === undefined || payload.seconds === null) {
+            setVoting(poll, false, null);
+        } else {
+            const seconds = payload.seconds;
+            if (!Number.isInteger(seconds) || seconds < MIN_TIMER_SEC || seconds > MAX_TIMER_SEC) return;
+            setVoting(poll, false, Date.now() + seconds * 1000);
+        }
+        notifyAll(poll);
     });
 
     // Returned over the socket rather than from a URL so the manage secret
@@ -405,7 +488,7 @@ io.on('connection', (socket) => {
         const poll = polls.get(code);
         if (!poll || socket.data.pollCode !== code) return;
         const visitor = poll.visitors.get(socket.data.voterId);
-        if (!visitor || visitor.voted || !Number.isInteger(index) || index < 0 || index >= poll.options.length) {
+        if (!isOpen(poll) || !visitor || visitor.voted || !Number.isInteger(index) || index < 0 || index >= poll.options.length) {
             // Resync the client, e.g. a second tab that already voted.
             socket.emit('init', voterView(poll, socket.data.voterId));
             return;

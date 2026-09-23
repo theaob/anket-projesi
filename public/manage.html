@@ -101,6 +101,74 @@
             font-weight: 600;
         }
 
+        .voting-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 0.95rem;
+            background: rgba(16, 185, 129, 0.12);
+            color: #047857;
+            font-feature-settings: "tnum" 1;
+        }
+
+        .voting-status::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .voting-status.urgent {
+            background: rgba(239, 68, 68, 0.12);
+            color: #b91c1c;
+        }
+
+        .voting-status.closed {
+            background: rgba(30, 27, 58, 0.06);
+            color: var(--text-muted);
+        }
+
+        .timer-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .timer-row span {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-right: 4px;
+        }
+
+        .timer-row button {
+            width: auto;
+            margin: 0;
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            background: rgba(99, 102, 241, 0.12);
+            color: var(--primary-dark);
+        }
+
+        .timer-row button:hover {
+            background: rgba(99, 102, 241, 0.2);
+        }
+
+        .btn-open {
+            background: #10b981;
+        }
+
+        .btn-close {
+            background: #475569;
+        }
+
         .stats-row {
             display: flex;
             flex-wrap: wrap;
@@ -216,6 +284,22 @@
             <p class="hint warn">Bu bağlantıyı saklayın: anketi yönetmenin tek yolu budur ve kaybolursa geri alınamaz.
                 Bağlantıya sahip olan herkes anketi düzenleyebilir veya silebilir.</p>
 
+            <h2>Oylama</h2>
+            <div class="voting-status" id="voting-status" role="status"></div>
+            <button type="button" id="btn-voting"></button>
+            <div class="timer-row" id="timer-presets">
+                <span>Süreli başlat:</span>
+                <button type="button" data-seconds="30">30 sn</button>
+                <button type="button" data-seconds="60">1 dk</button>
+                <button type="button" data-seconds="120">2 dk</button>
+                <button type="button" data-seconds="300">5 dk</button>
+            </div>
+            <div class="timer-row" id="timer-running" hidden>
+                <span>Süre işliyor:</span>
+                <button type="button" id="btn-extend">+30 sn</button>
+                <button type="button" id="btn-untimed">Süreyi kaldır (açık kalsın)</button>
+            </div>
+
             <h2>Sonuçlar</h2>
             <div class="stats-row" id="stats"></div>
             <div id="results"></div>
@@ -234,6 +318,7 @@
         </div>
     </div>
 
+    <script src="/js/voting-timer.js"></script>
     <script src="/js/manage.js"></script>
 </body>
 

@@ -158,7 +158,7 @@ Socket.IO reconnects with a new socket that has no rooms. `index.html` only join
 ### Presenter experience
 - ✅ **Presenter / projector view:** a full-screen, large-type live results page for the room screen. *Done: `/present?code=…`, with bars only; pie charts and word clouds are not built yet.*
 - ✅ **QR code and join link:** show `http://<host>/?code=1234` as a QR code in the presenter view, rendered on the server so it also works offline. *Done.*
-- **Open / close voting:** a start/stop toggle, an optional countdown timer, and "hide results until closed" to avoid bandwagon voting.
+- ✅ **Open / close voting:** a start/stop toggle, an optional countdown timer, and "hide results until closed" to avoid bandwagon voting. *Done: manual open/close, timer presets, and results on the presenter screen can be hidden until voting closes. Voters who have voted still see results straight away.*
 - **Live participant count:** how many people are connected, plus a votes-per-minute sparkline.
 - **Keyboard shortcuts** for presenting: next question, show or hide results, and so on.
 

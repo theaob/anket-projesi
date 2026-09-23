@@ -1,3 +1,6 @@
+/* The hidden attribute must win over any display rule below. */
+[hidden] { display: none !important; }
+
 :root {
     --primary: #6366f1;
     --secondary: #a855f7;

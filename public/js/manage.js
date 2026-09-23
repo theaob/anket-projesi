@@ -98,6 +98,25 @@
         else { addOption(); addOption(); }
     }
 
+    // Voting state as last reported by the countdown.
+    let voting = { open: true, remainingMs: null };
+    const votingTimer = VotingTimer.create((state) => {
+        voting = state;
+        const timed = state.open && state.remainingMs !== null;
+        const status = $('voting-status');
+        status.classList.toggle('closed', !state.open);
+        status.classList.toggle('urgent', timed && state.remainingMs <= 10000);
+        status.textContent = !state.open ? 'Oylama kapalı' : timed ? `Oylama açık · ${state.text} kaldı` : 'Oylama açık';
+        const toggle = $('btn-voting');
+        toggle.textContent = state.open ? '■ Oylamayı kapat' : '▶ Oylamayı aç';
+        toggle.className = state.open ? 'btn-close' : 'btn-open';
+        $('timer-running').hidden = !timed;
+    });
+
+    function setVoting(open, seconds) {
+        if (poll) socket.emit('setVoting', { code: poll.code, open, seconds });
+    }
+
     function showPoll(p, { refillEditor }) {
         poll = p;
         $('error').hidden = true;
@@ -109,6 +128,7 @@
         document.title = `${p.code} · Anketi Yönet`;
         renderStats();
         renderResults();
+        votingTimer.set(p.voting);
         if (refillEditor) fillEditor();
         rememberPoll(p);
     }
@@ -142,6 +162,16 @@
     });
 
     $('btn-add').addEventListener('click', () => addOption());
+
+    $('btn-voting').addEventListener('click', () => setVoting(!voting.open));
+    document.querySelectorAll('#timer-presets button').forEach((btn) => {
+        btn.addEventListener('click', () => setVoting(true, Number(btn.dataset.seconds)));
+    });
+    $('btn-extend').addEventListener('click', () => {
+        if (voting.remainingMs === null) return;
+        setVoting(true, Math.min(3600, Math.ceil(voting.remainingMs / 1000) + 30));
+    });
+    $('btn-untimed').addEventListener('click', () => setVoting(true));
 
     $('btn-save').addEventListener('click', () => {
         if (!poll) return;

@@ -73,6 +73,9 @@
   .poll-live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #ff3d5e;
     animation: pulse 1.2s ease-in-out infinite; }
   @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.6); opacity: 0.5; } }
+  .poll-live.urgent { color: #ff3d5e; }
+  .poll-live.closed { color: #a3a1b3; }
+  .poll-live.closed::before { background: #c9c7d6; animation: none; }
   .poll-options { display: flex; flex-direction: column; gap: 10px; }
   .poll-opt { position: relative; display: block; width: 100%; text-align: left; border: none; border-radius: 14px;
     background: #f4f3f9; padding: 14px 16px; cursor: pointer; font: inherit; font-size: 15px; font-weight: 600; color: #38364a;
@@ -138,13 +141,14 @@
 
   <div class="poll" id="poll" aria-live="polite">
     <p class="poll-q" id="poll-q"></p>
-    <span class="poll-live">Canlı</span>
+    <span class="poll-live" id="poll-live" role="status">Canlı</span>
     <div class="poll-options" id="poll-options"></div>
     <p class="poll-foot" id="poll-foot"></p>
   </div>
   <p class="conn" id="conn" role="status" hidden>Bağlantı koptu, yeniden bağlanılıyor…</p>
 </div>
 
+<script src="/js/voting-timer.js"></script>
 <script src="/js/index.js"></script>
 </body>
 </html>

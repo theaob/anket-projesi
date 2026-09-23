@@ -75,6 +75,21 @@
   }
   addEventListener('resize', fit);
 
+  // Countdown and open/closed state. When voting closes, results hidden with
+  // H come back automatically: that is the moment to show them.
+  let votingOpen = null;
+  const votingTimer = VotingTimer.create(({ open, remainingMs, text }) => {
+    const timed = open && remainingMs !== null;
+    $('countdown').hidden = !timed;
+    $('countdown-text').textContent = text;
+    $('countdown').classList.toggle('urgent', timed && remainingMs <= 10000);
+    document.body.classList.toggle('voting-closed', !open);
+    $('join-title').textContent = open ? 'Katılmak için tarayın' : 'Oylama kapandı';
+    $('live').textContent = open ? 'Canlı' : 'Oylama kapandı';
+    if (votingOpen === true && !open && hidden) toggleHidden();
+    votingOpen = open;
+  });
+
   function render(poll) {
     const optionsChanged = !current || current.options.length !== poll.options.length
       || current.options.some((o, i) => o !== poll.options[i]);
@@ -113,6 +128,7 @@
     }
     lastTotal = total;
     $('participants').textContent = poll.participants.toLocaleString('tr-TR');
+    votingTimer.set(poll.voting);
   }
 
   if (!/^\d{4,5}$/.test(code)) {
