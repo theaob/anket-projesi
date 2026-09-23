@@ -6,6 +6,9 @@ ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 ## [Unreleased]
 
 ### Düzeltildi
+- **Sunucu çökmelerine karşı koruma**: Tüm soket olayları hata yakalayıcıyla sarıldı; hatalı bir mesaj ya da veritabanı hatası artık sunucuyu çökertmiyor, hata günlüğe yazılıyor ve istemciye hata yanıtı dönülüyor. Veritabanı yazması başarısız olursa bellekteki durum değişmiyor. Mesaj boyutu 64 KB ile sınırlandı. Beklenmeyen bir hatada sunucu veritabanını düzgünce kapatıp çıkıyor (Docker `--restart` ile yeniden başlar).
+- **İçerik Güvenlik Politikası (CSP)**: Sayfalardaki satır içi betikler `public/js/` altındaki dosyalara taşındı ve sunucu yalnızca kendi betik dosyalarının çalışmasına izin veren bir `Content-Security-Policy` başlığı gönderiyor; `X-Content-Type-Options` ve `Referrer-Policy` başlıkları da eklendi.
+- **Anket kodlarının tükenmesi**: 4 haneli kodlar (9000 adet) neredeyse dolduğunda sunucu otomatik olarak 5 haneli kodlar vermeye başlıyor; katılım ekranı 5. haneyi yalnızca gerektiğinde gösteriyor.
 - **Seçenek metinleriyle kod enjeksiyonu (XSS)**: Oy ekranı seçenek metinlerini artık HTML olarak değil düz metin olarak gösteriyor; anket oluşturan biri katılımcıların tarayıcısında kod çalıştıramıyor.
 - **Sunucu tarafında oy sınırı**: Her tarayıcı rastgele bir kimlikle bağlanıyor ve sunucu, aynı kimliğin bir ankette ikinci kez oy vermesini reddediyor. Oy vermek için önce ankete katılmış olmak gerekiyor ve geçersiz seçenek indeksleri reddediliyor. Önceden sınır yalnızca tarayıcıdaki `localStorage` bayrağıydı.
 - **Kaydet oyları silmiyor**: Anketi kaydetmek artık yalnızca seçenekler değiştiyse oyları sıfırlıyor (ve admin panelinde önce onay isteniyor). Soru metnindeki bir düzeltme oyları korur.

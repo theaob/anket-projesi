@@ -3,7 +3,7 @@
 **Date:** 2026-09-22
 **Scope:** `server.js`, `public/index.html`, `public/admin.html`, `public/style.css`, `Dockerfile`, `.github/workflows/*`, `package.json`, `README.md`, `CHANGELOG.md`
 
-> **Status update:** H1–H5 are fixed, along with M2 and M4, and most of M3. C2 no longer applies: the shared admin panel was replaced by a secret manage link for each poll. C1, C3 and C4 are partly fixed. See the ✅ notes below.
+> **Status update:** All critical and high findings are resolved: C1, C3, C4 and H1–H5 are fixed, and C2 no longer applies because the shared admin panel was replaced by a secret manage link for each poll. M2 and M4 are fixed and most of M3. See the ✅ notes below.
 
 Findings marked **(verified)** were reproduced against a running server or checked on GitHub. The others come from reading the code.
 
@@ -24,12 +24,12 @@ For an app meant to run on a closed intranet, the top priority is the first two 
 
 ## 🔴 Critical
 
-### C1. A malformed `updatePoll` event crashes the whole process (verified)
+### C1. A malformed `updatePoll` event crashes the whole process (verified) — ✅ fixed
 `server.js:82` runs `options.map(...)` without checking the input. Emitting `updatePoll` with no `options` array throws `TypeError: Cannot read properties of undefined (reading 'map')`. The exception is uncaught, so Node exits. Because all state is in memory (see H2), **every poll and vote is lost**.
 
 *Reproduced:* `socket.emit('updatePoll', { code, question: 'x' })` → server log shows the TypeError, and `curl localhost:3000` then gets connection refused.
 
-> ✅ **Partly fixed:** `updatePoll` and `castVote` now validate their input, so this crash no longer happens. There is still no general error wrapper around the handlers.
+> ✅ **Fixed:** payloads are validated, and every socket handler runs inside a wrapper that logs errors and sends an error reply instead of letting them escape. Database writes happen before in-memory changes, so a failed write leaves no partial state. Messages are capped at 64 KB. As a last resort, an uncaught exception closes the database and exits for Docker to restart. Tested with 270 malformed messages and a simulated disk failure; the server stayed up.
 
 **Fix:**
 - Validate every socket payload: types, array lengths, string lengths, and that `index` is an integer in range.
@@ -46,7 +46,7 @@ For an app meant to run on a closed intranet, the top priority is the first two 
 
 > ✅ The shared admin panel and `/export` were removed. Anyone can create a poll and receives a secret manage link (`/manage#<secret>`); only the SHA-256 hash of the secret is stored. The server rejects every owner action (edit, reset, export, delete) from a socket that hasn't unlocked that poll with its secret.
 
-### C3. Stored XSS in the voter page and the admin panel
+### C3. Stored XSS in the voter page and the admin panel — ✅ fixed
 Poll text written by one user is inserted into other users' pages as raw HTML:
 - `public/index.html:279`: option labels are concatenated into `innerHTML`, so script runs on **every voter's device**.
 - `public/admin.html:281`: `${p.question}` goes into `innerHTML` in the poll list.
@@ -54,16 +54,16 @@ Poll text written by one user is inserted into other users' pages as raw HTML:
 
 Combined with C2, anyone can inject script into the admin's browser.
 
-> ✅ **Partly fixed:** the voter page now builds option buttons with `textContent`. `admin.html` was removed, and the new `manage.html` never inserts user text as HTML. There is no Content-Security-Policy header yet.
+> ✅ **Fixed:** the voter page builds option buttons with `textContent`, and `manage.html` never inserts user text as HTML. The inline scripts moved to `public/js/`, and the server sends a `Content-Security-Policy` with `script-src 'self'`, so injected inline script is refused by the browser (verified). Styles still allow `'unsafe-inline'`.
 
 **Fix:**
 - Build these elements with `textContent` and `createElement` instead of HTML strings, or escape the text.
 - Add a Content-Security-Policy header that blocks inline script. This requires moving the inline `<script>` blocks into files, which also removes the `onclick=` attributes in `admin.html`.
 
-### C4. `generateCode()` loops forever once all 9000 codes are used
+### C4. `generateCode()` loops forever once all 9000 codes are used — ✅ fixed
 `server.js:18-24` retries random 4-digit codes until it finds a free one. With 9000 polls there is no free code, and the loop blocks the event loop permanently. `createPoll` has no auth or rate limit, so a script can reach that state in seconds. Each poll also costs memory with no limit.
 
-> ✅ **Partly fixed:** `generateCode()` gives up after 100 attempts and returns an error instead of hanging. Creation is limited to 20 polls per hour per address. Codes are still 4 digits, and old polls are not removed automatically.
+> ✅ **Fixed:** `generateCode()` never loops forever. When the 4-digit codes are nearly used up it falls back to 5-digit codes (99,000 codes in total), and it returns an error only if both are full. Creation is limited to 20 polls per hour per address. Old polls are still never removed automatically; that was left out on purpose, because polls and results are meant to be kept.
 
 **Fix:** cap the number of polls or the creation rate, and fail with an error after N attempts. Longer codes (5–6 digits) and removing old polls automatically would also help.
 

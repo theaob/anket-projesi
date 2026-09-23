@@ -8,7 +8,30 @@ const { openDatabase } = require('./db');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+// Every legitimate message is small (at most 20 options of 200 characters).
+const io = new Server(server, { maxHttpBufferSize: 64 * 1024 });
+
+// Content-Security-Policy: scripts may only come from this server's own
+// files, so even if poll text were ever rendered as HTML it could not run.
+// Inline <style> blocks are still used by the pages, hence 'unsafe-inline'
+// for styles only.
+const CSP = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'none'"
+].join('; ');
+app.use((req, res, next) => {
+    res.setHeader('Content-Security-Policy', CSP);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'same-origin');
+    next();
+});
 
 // The shared admin panel was replaced by per-poll manage links.
 app.get('/admin.html', (req, res) => res.redirect('/'));
@@ -24,8 +47,9 @@ const MAX_OPTIONS = 20;
 const MAX_TEXT = 200;
 const VOTER_ID_RE = /^[a-f0-9]{32}$/;
 const MANAGE_SECRET_RE = /^[A-Za-z0-9_-]{32}$/;
-// Anyone can create polls and there are only 9000 four-digit codes, so cap
-// how fast a single address can create them.
+const POLL_CODE_RE = /^\d{4,5}$/;
+// Anyone can create polls and the code space is finite (see generateCode),
+// so cap how fast a single address can create them.
 const CREATE_LIMIT = 20;
 const CREATE_WINDOW_MS = 60 * 60 * 1000;
 
@@ -53,11 +77,28 @@ function shutdown() {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
+// Last resort. Socket handlers catch their own errors (see `on` below), so
+// reaching this means something unexpected; the state may be inconsistent,
+// so log, close the database cleanly and exit for the process manager
+// (Docker --restart) to restart. All data is already in the database.
+process.on('uncaughtException', (err) => {
+    console.error('Beklenmeyen hata, sunucu kapanıyor:', err);
+    try { db.close(); } catch (e) { /* already closed */ }
+    process.exit(1);
+});
+process.on('unhandledRejection', (err) => {
+    console.error('Yakalanmamış Promise hatası:', err);
+});
+
 // ── Poll helpers ───────────────────────────────────────────────
+// Codes are 4 digits (9000 possible). Only when random picks keep colliding,
+// i.e. the 4-digit space is nearly full, fall back to 5 digits (90000 more).
 function generateCode() {
-    for (let attempt = 0; attempt < 100; attempt++) {
-        const code = String(Math.floor(1000 + Math.random() * 9000));
-        if (!polls.has(code)) return code;
+    for (const [min, span] of [[1000, 9000], [10000, 90000]]) {
+        for (let attempt = 0; attempt < 50; attempt++) {
+            const code = String(min + Math.floor(Math.random() * span));
+            if (!polls.has(code)) return code;
+        }
     }
     return null;
 }
@@ -105,9 +146,12 @@ function notifyOwners(poll) {
 }
 
 // Every voter gets their own `voted` flag, so a plain room broadcast won't do.
-async function sendInitToRoom(poll) {
-    const sockets = await io.in(`poll:${poll.code}`).fetchSockets();
-    for (const s of sockets) s.emit('init', voterView(poll, s.data.voterId));
+function sendInitToRoom(poll) {
+    io.in(`poll:${poll.code}`).fetchSockets()
+        .then(sockets => {
+            for (const s of sockets) s.emit('init', voterView(poll, s.data.voterId));
+        })
+        .catch(err => console.error('Anket güncellemesi gönderilemedi:', err));
 }
 
 function resetRound(poll) {
@@ -141,7 +185,7 @@ function leavePoll(socket) {
 }
 
 function buildCsv(poll) {
-    let csvContent = "﻿";
+    let csvContent = "\uFEFF";
     csvContent += "Secenek,Oy Sayisi\n";
     poll.options.forEach((opt, i) => {
         const text = String(opt).replace(/"/g, '""');
@@ -185,10 +229,22 @@ io.on('connection', (socket) => {
     socket.data.owned = new Set();
 
     const reply = (ack, value) => { if (typeof ack === 'function') ack(value); };
+
+    // Registers a handler that can never take the server down: an error (a
+    // malformed payload that slipped past validation, a database failure) is
+    // logged, and a waiting client gets an error reply instead of hanging.
+    const on = (event, handler) => socket.on(event, (...args) => {
+        try {
+            handler(...args);
+        } catch (err) {
+            console.error(`"${event}" işlenirken hata:`, err);
+            reply(args[args.length - 1], { error: 'Sunucu hatası, lütfen tekrar deneyin.' });
+        }
+    });
     const ownedPoll = (code) => (socket.data.owned.has(code) ? polls.get(code) : null);
 
     // ── Owner events ───────────────────────────────────────────
-    socket.on('createPoll', (ack) => {
+    on('createPoll', (ack) => {
         if (!allowCreate(socket.handshake.address)) {
             return reply(ack, { error: 'Çok fazla anket oluşturuldu, lütfen daha sonra tekrar deneyin.' });
         }
@@ -201,7 +257,7 @@ io.on('connection', (socket) => {
     });
 
     // Unlocks management of one poll for this socket.
-    socket.on('manage', (secret, ack) => {
+    on('manage', (secret, ack) => {
         const code = typeof secret === 'string' && MANAGE_SECRET_RE.test(secret)
             ? db.findCodeByManageHash(hashSecret(secret))
             : null;
@@ -212,7 +268,7 @@ io.on('connection', (socket) => {
         reply(ack, { poll: ownerView(poll) });
     });
 
-    socket.on('updatePoll', (payload) => {
+    on('updatePoll', (payload) => {
         const poll = ownedPoll(payload?.code);
         if (!poll || !Array.isArray(payload.options)) return;
         const options = payload.options.map(cleanText).filter(Boolean).slice(0, MAX_OPTIONS);
@@ -230,7 +286,7 @@ io.on('connection', (socket) => {
         sendInitToRoom(poll);
     });
 
-    socket.on('deletePoll', (code) => {
+    on('deletePoll', (code) => {
         const poll = ownedPoll(code);
         if (!poll) return;
         db.deletePoll(code);
@@ -241,7 +297,7 @@ io.on('connection', (socket) => {
         io.in(`manage:${code}`).socketsLeave(`manage:${code}`);
     });
 
-    socket.on('resetVotes', (code) => {
+    on('resetVotes', (code) => {
         const poll = ownedPoll(code);
         if (!poll) return;
         // Visitors who aren't connected are forgotten, which resets the visit
@@ -256,35 +312,37 @@ io.on('connection', (socket) => {
 
     // Returned over the socket rather than from a URL so the manage secret
     // never has to appear in a link or a server log.
-    socket.on('exportCsv', (code, ack) => {
+    on('exportCsv', (code, ack) => {
         const poll = ownedPoll(code);
         reply(ack, poll ? { csv: buildCsv(poll) } : { error: 'Anket bulunamadı.' });
     });
 
     // ── Voter events ───────────────────────────────────────────
-    socket.on('joinPoll', (code) => {
-        const poll = polls.get(code);
+    on('joinPoll', (code) => {
+        const poll = typeof code === 'string' && POLL_CODE_RE.test(code) ? polls.get(code) : null;
         if (!poll) {
             socket.emit('pollError', 'Geçersiz anket kodu.');
             return;
         }
         if (socket.data.pollCode !== code) {
-            const previous = leavePoll(socket);
-            if (previous) notifyOwners(previous);
-            socket.join(`poll:${code}`);
-            socket.data.pollCode = code;
             const id = socket.data.voterId;
-            poll.active.set(id, (poll.active.get(id) || 0) + 1);
+            // Database first: if the write fails, nothing in memory has changed
+            // and the voter can simply try again.
             if (!poll.visitors.has(id)) {
                 db.addVisitor(code, id);
                 poll.visitors.set(id, { voted: false, choice: null });
             }
+            const previous = leavePoll(socket);
+            if (previous) notifyOwners(previous);
+            socket.join(`poll:${code}`);
+            socket.data.pollCode = code;
+            poll.active.set(id, (poll.active.get(id) || 0) + 1);
         }
         socket.emit('init', voterView(poll, socket.data.voterId));
         notifyOwners(poll);
     });
 
-    socket.on('castVote', (payload) => {
+    on('castVote', (payload) => {
         const code = payload?.code;
         const index = payload?.index;
         const poll = polls.get(code);
@@ -303,7 +361,7 @@ io.on('connection', (socket) => {
         notifyOwners(poll);
     });
 
-    socket.on('disconnect', () => {
+    on('disconnect', () => {
         const poll = leavePoll(socket);
         if (poll) notifyOwners(poll);
     });
