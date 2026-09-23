@@ -3,7 +3,14 @@
 Bu proje [Keep a Changelog](https://keepachangelog.com/tr/1.0.0/) formatını,
 ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 
-## [Unreleased]
+## [2.0.0] - 2026-09-23
+
+### ⚠️ Yükseltme notları
+- **Mevcut anketler silinir.** Ortak admin paneli kaldırıldığı için sahibi olmayan tüm anketler ve sonuçları ilk açılışta veritabanından kalıcı olarak silinir. Saklamak istediğiniz sonuçları yükseltmeden önce dışa aktarın.
+- **Node.js 22.13+ gerekir** (Docker imajı `node:22-alpine` kullanıyor).
+- **Veri artık kalıcı:** Docker'da `/app/data` dizinine bir volume bağlayın (`-v anket-data:/app/data`) ve `--restart unless-stopped` kullanın.
+- **İnternette yayınlıyorsanız** HTTPS ters vekil arkasında çalıştırın ve `TRUST_PROXY=1`, `PUBLIC_URL=https://alan-adiniz` ayarlayın; Cloudflare Turnstile önerilir (`TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`). Ayrıntılar README'de "İnternette Yayınlama" bölümünde.
+- `/admin.html` ve `/export` adresleri kaldırıldı.
 
 ### Güvenlik
 - **Toplu oy kullanmaya karşı koruma (internette yayın için)**: Katılımcı kimliği artık tarayıcıda üretilmiyor; sunucu her tarayıcıya imzalı, HttpOnly bir çerez veriyor (`/api/voter`) ve oy yalnızca geçerli çerezle kabul ediliyor. Yeni kimlikler ağ başına (IP; IPv6'da /64) sınırlı hızda veriliyor (`VOTER_ID_BURST`, `VOTER_ID_PER_HOUR`); sınıra takılan ziyaretçi bekleyip otomatik katılıyor. İsteğe bağlı Cloudflare Turnstile doğrulaması eklendi (`TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`). Önceden bir betik uydurma kimliklerle saniyede yüzlerce oy kullanabiliyordu.
