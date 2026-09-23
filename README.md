@@ -1,19 +1,21 @@
-# 📊 Premium Poll System (Mentimeter Clone)
+# 📊 Anket Projesi
 
-Kapalı ağlarda (Intranet) çalışmak üzere tasarlanmış, ultra profesyonel görünümlü, canlı anket uygulaması. 
+Toplantı, ders ve etkinlikler için canlı anket uygulaması. Kapalı ağda (intranet) internet bağlantısı olmadan çalışır; HTTPS ters vekil arkasında internette de yayınlanabilir.
 
+[![CI](https://github.com/theaob/anket-projesi/actions/workflows/ci.yml/badge.svg)](https://github.com/theaob/anket-projesi/actions/workflows/ci.yml)
 [![Build and Push to DockerHub](https://github.com/theaob/anket-projesi/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/theaob/anket-projesi/actions/workflows/docker-publish.yml)
 
 ## ✨ Özellikler
 
-* **💎 Premium UI:** Glassmorphism ve modern animasyonlarla donatılmış akıcı arayüz.
+* **💎 Modern Arayüz:** Animasyonlu, telefona uygun arayüz; klavye ve ekran okuyucuyla kullanılabilir (WCAG 2 AA renk kontrastı).
 * **📡 Canlı Sonuçlar:** Socket.io ile anlık grafik güncellemeleri.
 * **⏱ Oylamayı Aç/Kapat ve Zamanlayıcı:** Oylamayı elle açıp kapatın ya da süreli başlatın; süre dolunca oylama kendiliğinden kapanır ve sonuçlar herkese gösterilir.
 * **🖥 Sunum Ekranı:** Projeksiyon için tam ekran canlı sonuçlar; katılım QR kodu ve anket kodu ekranda.
 * **👥 Herkes Kendi Anketini Oluşturur:** Hesap gerekmez. Ana sayfadan anket oluşturan kişiye gizli bir yönetim bağlantısı verilir; anketi yalnızca bu bağlantıya sahip olanlar düzenleyebilir, sıfırlayabilir veya silebilir.
 * **🚀 GitHub Otomasyonu:** Versiyon kontrolü ve otomatik GitHub Release yayını.
 * **📊 Excel Export:** Sonuçları tek tıkla CSV/Excel formatında indirme.
-* **🔒 Kapalı Ağ Uyumu:** İnternet bağımlılığı olmadan %100 offline çalışma.
+* **🔒 Kapalı Ağ Uyumu:** Kapalı ağda internet bağlantısı gerekmez (isteğe bağlı Cloudflare Turnstile dışında hiçbir dış servis kullanılmaz).
+* **🌐 İnternette Yayın:** İmzalı katılımcı çerezleri, ağ başına hız sınırları ve isteğe bağlı bot doğrulamasıyla toplu oy kullanmaya karşı koruma.
 * **🐳 Docker Ready:** Tek komutla her ortamda tutarlı kurulum.
 
 ## 🚀 Hızlı Başlangıç
@@ -22,7 +24,11 @@ Kapalı ağlarda (Intranet) çalışmak üzere tasarlanmış, ultra profesyonel 
 1. Bağımlılıkları yükleyin: `npm install`
 2. Sunucuyu başlatın: `node server.js` (Node.js 22.13+)
 3. Tarayıcıda açın: `http://localhost:3000` (port `PORT` ortam değişkeniyle değiştirilebilir)
-4. Testleri çalıştırın: `npm test` (her push ve pull request'te GitHub Actions'ta da çalışır)
+4. Testleri ve lint'i çalıştırın: `npm test`, `npm run lint` (her push ve pull request'te GitHub Actions'ta da çalışır)
+
+### Sürüm Çıkarma
+1. `CHANGELOG.md` içindeki `## [Unreleased]` başlığını yeni sürümle değiştirin (örn. `## [2.0.1] - 2026-09-23`) ve commit edip `main`'e gönderin.
+2. `npm run release:patch` (veya `release:minor` / `release:major`) çalıştırın. Betik önce `main` dalında, temiz ve GitHub ile eşit olduğunuzu ve CHANGELOG'da yeni sürümün bölümü bulunduğunu kontrol eder; ardından sürümü artırır, etiketler ve gönderir. GitHub Actions Docker imajını ve sürüm notlarını yayınlar. Yalnızca kontrolleri çalıştırmak için: `npm run release:patch -- --dry-run`.
 
 ## 🗳 Kullanım
 1. Ana sayfada **"Yeni anket oluştur"** düğmesine basın. Anketin yönetim sayfasına (`/manage#<gizli-anahtar>`) yönlendirilirsiniz.

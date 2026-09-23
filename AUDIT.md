@@ -3,7 +3,7 @@
 **Date:** 2026-09-22
 **Scope:** `server.js`, `public/index.html`, `public/admin.html`, `public/style.css`, `Dockerfile`, `.github/workflows/*`, `package.json`, `README.md`, `CHANGELOG.md`
 
-> **Status update (after v2.0.0):** all critical and high findings are resolved (C2 no longer applies, since the shared admin panel was replaced by per-poll manage links). All medium findings are fixed. Of the low findings, L1, L5, L6 and L9 are still open. The server now has an integration test suite that runs in CI on every push and pull request, together with a Docker smoke test. See the ✅ notes below.
+> **Status update (after v2.0.0):** all critical and high findings are resolved (C2 no longer applies, since the shared admin panel was replaced by per-poll manage links). All medium findings are fixed. All low findings are fixed as well. The server now has an integration test suite that runs in CI on every push and pull request, together with a Docker smoke test. See the ✅ notes below.
 
 Findings marked **(verified)** were reproduced against a running server or checked on GitHub. The others come from reading the code.
 
@@ -122,15 +122,15 @@ Socket.IO reconnects with a new socket that has no rooms. `index.html` only join
 
 ## 🔵 Low
 
-- **L1. The README is out of date.** It advertises "Weighted Scoring" (removed in 1.2.0) and a results screen that no longer exists. It doesn't mention poll codes, the `?code=` link or metrics. The "Mentimeter Clone" wording may raise trademark concerns.
+- ✅ fixed — **L1. The README is out of date.** It advertises "Weighted Scoring" (removed in 1.2.0) and a results screen that no longer exists. It doesn't mention poll codes, the `?code=` link or metrics. The "Mentimeter Clone" wording may raise trademark concerns.
 - ✅ fixed — **L2. Port and bind address are hard-coded.** `PORT = 3000` (`server.js:41`) should read `process.env.PORT`. `getLocalIp()` returns the first non-internal interface, which in Docker is the container IP, so the printed URL is misleading.
 - ✅ fixed — **L3. No `.gitignore`.** `node_modules/` can be committed by accident.
-- ✅ fixed (tests and CI; no linter or formatter yet) — **L4. No tests, linting or formatting.** Add ESLint and Prettier, plus a few `node:test` + `socket.io-client` integration tests for create, vote, reset and export, and for the validation cases above. Run them in CI on PRs.
-- *partly fixed (`engines` added)* — **L5. `package.json` gaps.** Add `"private": true` and `"engines": { "node": ">=20" }`, and make the `name` match the repo. The `release:*` scripts push `HEAD` from whatever branch is checked out; add a guard that only allows `main`.
-- **L6. The title animation never stops.** Two `requestAnimationFrame` loops in `index.html` run forever, even when the tab is in the background or the card is showing results. This drains battery on phones. Pause them on `visibilitychange` or once a poll is shown.
+- ✅ fixed (tests, ESLint and CI; no formatter) — **L4. No tests, linting or formatting.** Add ESLint and Prettier, plus a few `node:test` + `socket.io-client` integration tests for create, vote, reset and export, and for the validation cases above. Run them in CI on PRs.
+- ✅ fixed (`private`, name `anket-projesi`, `engines`; `release:*` runs `scripts/release.js`, which checks branch, clean tree, sync with GitHub and the CHANGELOG section) — **L5. `package.json` gaps.** Add `"private": true` and `"engines": { "node": ">=20" }`, and make the `name` match the repo. The `release:*` scripts push `HEAD` from whatever branch is checked out; add a guard that only allows `main`.
+- ✅ fixed (browsers already pause animation frames in hidden tabs; the real cost was running nonstop while visible, so it now stops when a poll is open or the title is scrolled away) — **L6. The title animation never stops.** Two `requestAnimationFrame` loops in `index.html` run forever, even when the tab is in the background or the card is showing results. This drains battery on phones. Pause them on `visibilitychange` or once a poll is shown.
 - ✅ fixed (scripts moved to `public/js/`) — **L7. Code structure.** All voter JS and CSS is inline in `index.html` (406 lines), while `style.css` is used only by the admin page. Moving them into files helps with CSP (C3), caching and maintenance.
 - ✅ fixed — **L8. `localStorage` access isn't guarded.** It can throw (for example in some private-browsing modes or when storage is blocked), which would break voting. Wrap it in `try/catch`.
-- **L9. Accessibility.** Add a visible focus style to the option buttons, announce the result percentages to screen readers (`aria-label` on each bar), and check colour contrast on the gradient title.
+- ✅ fixed (axe-core reports no WCAG 2 A/AA violations on any page state; focus rings, labels, landmarks, contrast, screen-reader labels and announcements) — **L9. Accessibility.** Add a visible focus style to the option buttons, announce the result percentages to screen readers (`aria-label` on each bar), and check colour contrast on the gradient title.
 
 ---
 

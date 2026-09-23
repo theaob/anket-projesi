@@ -25,6 +25,12 @@
             animation: fadeIn 0.5s ease-out;
         }
 
+        .page-title {
+            margin: 0 0 20px;
+            font-size: 1.6rem;
+            text-align: left;
+        }
+
         h2 {
             font-size: 1.1rem;
             font-weight: 700;
@@ -66,7 +72,7 @@
             vertical-align: top;
             padding: 14px 18px;
             border-radius: 14px;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            background: linear-gradient(135deg, #4f46e5, #7e22ce);
             color: #fff;
             font-weight: 700;
             text-decoration: none;
@@ -91,6 +97,7 @@
         }
 
         .hint {
+            display: block;
             font-size: 0.8rem;
             color: var(--text-muted);
             margin: 2px 0 12px;
@@ -162,7 +169,7 @@
         }
 
         .btn-open {
-            background: #10b981;
+            background: #047857;
         }
 
         .btn-close {
@@ -195,7 +202,7 @@
         }
 
         .btn-remove {
-            background: #ef4444;
+            background: #dc2626;
             border-radius: 8px;
             padding: 8px 14px;
             font-size: 16px;
@@ -204,7 +211,7 @@
         }
 
         .btn-add {
-            background: #6366f1;
+            background: #4f46e5;
             margin-bottom: 4px;
         }
 
@@ -219,15 +226,15 @@
         }
 
         .btn-reset {
-            background: #f59e0b;
+            background: #b45309;
         }
 
         .btn-export {
-            background: #10b981;
+            background: #047857;
         }
 
         .btn-delete {
-            background: #ef4444;
+            background: #dc2626;
         }
 
         .empty-state {
@@ -246,7 +253,7 @@
             top: 12px;
             left: 50%;
             transform: translateX(-50%);
-            background: #ff3d5e;
+            background: #c81e45;
             color: #fff;
             padding: 8px 16px;
             border-radius: 999px;
@@ -260,8 +267,9 @@
 <body>
     <div class="conn-banner" id="conn" role="status" hidden>Bağlantı koptu, yeniden bağlanılıyor…</div>
 
-    <div class="panel">
+    <main class="panel">
         <a class="home-link" href="/">← Ana sayfa</a>
+        <h1 class="page-title">Anketi Yönet</h1>
 
         <div id="error" class="error-box" hidden></div>
 
@@ -270,13 +278,13 @@
             <div class="code-badge" id="code"></div>
             <a class="present-link" id="present-link" target="_blank" rel="noopener">🖥 Sunum ekranını aç</a>
 
-            <p class="hint">Katılımcılar bu bağlantıyı açabilir ya da kodu ana sayfada girebilir:</p>
+            <label class="hint" for="share-link">Katılımcılar bu bağlantıyı açabilir ya da kodu ana sayfada girebilir:</label>
             <div class="link-row">
                 <input type="text" id="share-link" readonly>
                 <button type="button" data-copy="share-link">Kopyala</button>
             </div>
 
-            <p class="hint">Yönetim bağlantısı:</p>
+            <label class="hint" for="manage-link">Yönetim bağlantısı:</label>
             <div class="link-row">
                 <input type="text" id="manage-link" readonly>
                 <button type="button" data-copy="manage-link">Kopyala</button>
@@ -305,7 +313,7 @@
             <div id="results"></div>
 
             <h2>Düzenle</h2>
-            <input type="text" id="question" placeholder="Soru nedir?" maxlength="200">
+            <input type="text" id="question" placeholder="Soru nedir?" maxlength="200" aria-label="Soru">
             <div id="options-list"></div>
             <button type="button" class="btn-add" id="btn-add">+ Seçenek Ekle</button>
             <button type="button" id="btn-save">✔ Yayınla</button>
@@ -316,7 +324,7 @@
                 <button type="button" class="btn-delete" id="btn-delete">Anketi Sil</button>
             </div>
         </div>
-    </div>
+    </main>
 
     <script src="/js/voting-timer.js"></script>
     <script src="/js/manage.js"></script>

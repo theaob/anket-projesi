@@ -83,56 +83,87 @@
   function updatePointer(e) { mouseX = e.clientX; mouseY = e.clientY; pointerActive = true; }
   function resetPointer() { pointerActive = false; }
 
+  // Static pose (also the reduced-motion look): upright letters, gradient
+  // spread evenly across the phrase.
+  function rest() {
+    letters.forEach((el) => {
+      el.style.transform = '';
+      el.style.backgroundPositionX = -el.offsetLeft + 'px';
+    });
+  }
+
+  function waveFrame(now) {
+    letters.forEach((el, i) => {
+      const delay = i * LETTER_STAGGER;
+      const t = (((now - delay) % WAVE_PERIOD) + WAVE_PERIOD) % WAVE_PERIOD / WAVE_PERIOD;
+      const wave = Math.sin(t * Math.PI); // 0 at t=0, 1 at t=0.5, 0 at t=1
+      const y = -WAVE_Y * wave;
+      const rotY = 180 * wave;
+
+      let pullX = 0, pullY = 0, scale = 1;
+      if (pointerActive) {
+        const c = centers[i];
+        const dx = mouseX - c.x, dy = mouseY - c.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < PULL_RADIUS && dist > 0.1) {
+          const pull = (1 - dist / PULL_RADIUS) * PULL_STRENGTH;
+          pullX = dx / dist * pull;
+          pullY = dy / dist * pull;
+          scale = 1 + pull / 90;
+        }
+      }
+
+      el.style.transform = `translate(${pullX.toFixed(2)}px, ${(y + pullY).toFixed(2)}px) rotateY(${rotY.toFixed(1)}deg) scale(${scale.toFixed(3)})`;
+    });
+  }
+
+  const SWEEP_PERIOD = 2600; // ms for one full left-to-right (or back) sweep
+  function sweepFrame(now) {
+    const elapsed = now % (SWEEP_PERIOD * 2);
+    const t = elapsed < SWEEP_PERIOD ? elapsed / SWEEP_PERIOD : (SWEEP_PERIOD * 2 - elapsed) / SWEEP_PERIOD; // 0→1→0 ping-pong
+    const shift = t * width; // sweeps the gradient from the first letter to the last, then back
+    letters.forEach((el) => {
+      el.style.backgroundPositionX = (-Number(el.dataset.left) + shift - width) + 'px';
+    });
+  }
+
+  // The animation only runs while someone can see it: not once a poll is open
+  // (the visitor is reading or voting) and not while the title is scrolled
+  // out of view. Hidden tabs are already paused by the browser.
+  const pollEl = document.getElementById('poll');
+  let titleVisible = true;
+  let running = false;
+
+  function frame(now) {
+    if (!running) return;
+    waveFrame(now);
+    sweepFrame(now);
+    requestAnimationFrame(frame);
+  }
+
+  function updateAnimation() {
+    const shouldRun = !reduceMotion && titleVisible && !pollEl.hasAttribute('data-active');
+    if (shouldRun && !running) {
+      running = true;
+      requestAnimationFrame(frame);
+    } else if (!shouldRun && running) {
+      running = false;
+      rest();
+    }
+  }
+
   if (!reduceMotion) {
     addEventListener('pointermove', updatePointer);
     addEventListener('pointerdown', updatePointer);
     addEventListener('pointerleave', resetPointer);
-
-    function tick(now) {
-      letters.forEach((el, i) => {
-        const delay = i * LETTER_STAGGER;
-        const t = (((now - delay) % WAVE_PERIOD) + WAVE_PERIOD) % WAVE_PERIOD / WAVE_PERIOD;
-        const wave = Math.sin(t * Math.PI); // 0 at t=0, 1 at t=0.5, 0 at t=1
-        const y = -WAVE_Y * wave;
-        const rotY = 180 * wave;
-
-        let pullX = 0, pullY = 0, scale = 1;
-        if (pointerActive) {
-          const c = centers[i];
-          const dx = mouseX - c.x, dy = mouseY - c.y;
-          const dist = Math.hypot(dx, dy);
-          if (dist < PULL_RADIUS && dist > 0.1) {
-            const pull = (1 - dist / PULL_RADIUS) * PULL_STRENGTH;
-            pullX = dx / dist * pull;
-            pullY = dy / dist * pull;
-            scale = 1 + pull / 90;
-          }
-        }
-
-        el.style.transform = `translate(${pullX.toFixed(2)}px, ${(y + pullY).toFixed(2)}px) rotateY(${rotY.toFixed(1)}deg) scale(${scale.toFixed(3)})`;
-      });
-      requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
+    new IntersectionObserver(([entry]) => {
+      titleVisible = entry.isIntersecting;
+      updateAnimation();
+    }).observe(titleEl);
+    new MutationObserver(updateAnimation).observe(pollEl, { attributes: true, attributeFilter: ['data-active'] });
   }
-
-  if (reduceMotion) {
-    letters.forEach((el) => { el.style.backgroundPositionX = -el.offsetLeft + 'px'; });
-  } else {
-    const period = 2600; // ms for one full left-to-right (or back) sweep
-    let start = null;
-    function sweepTick(ts) {
-      if (start === null) start = ts;
-      const elapsed = (ts - start) % (period * 2);
-      const t = elapsed < period ? elapsed / period : (period * 2 - elapsed) / period; // 0→1→0 ping-pong
-      const shift = t * width; // sweeps the gradient from the first letter to the last, then back
-      letters.forEach((el) => {
-        el.style.backgroundPositionX = (-Number(el.dataset.left) + shift - width) + 'px';
-      });
-      requestAnimationFrame(sweepTick);
-    }
-    requestAnimationFrame(sweepTick);
-  }
+  rest();
+  updateAnimation();
 })();
 (() => {
   const form = document.getElementById('join-form');
@@ -260,6 +291,14 @@
   let votingOpen = true;
   let lastVotes = [];
   const liveEl = document.getElementById('poll-live');
+  const srStatus = document.getElementById('sr-status');
+
+  // Tells screen-reader users about events they can't see happen. The
+  // countdown itself is not announced (it changes four times a second).
+  function announce(text) {
+    srStatus.textContent = '';
+    setTimeout(() => { srStatus.textContent = text; }, 50);
+  }
 
   function totalVotes(votes) {
     return Object.values(votes || {}).reduce((a, b) => a + b, 0);
@@ -282,6 +321,7 @@
       votingOpen = false;
       poll.toggleAttribute('data-voted', true);
       renderOptions(lastVotes);
+      announce('Oylama kapandı. Sonuçlar gösteriliyor.');
     }
   });
 
@@ -313,6 +353,8 @@
       pctEl.textContent = pct + '%';
       row.append(text, pctEl);
       btn.append(fill, row);
+      // The bar and percentage are visual; give screen readers the result.
+      if (revealed()) btn.setAttribute('aria-label', `${label}: %${pct}, ${(votes[i] || 0).toLocaleString('tr-TR')} oy`);
       return btn;
     }));
     foot.textContent = t.toLocaleString('tr-TR') + ' oy verildi';
@@ -346,6 +388,7 @@
     check.style.pointerEvents = 'none';
     check.style.zIndex = '999';
     check.style.transform = 'translate(-50%, -50%) scale(0)';
+    check.setAttribute('aria-hidden', 'true');
     document.body.appendChild(check);
     check.animate([
       { transform: 'translate(-50%, -50%) scale(0)' },
@@ -363,6 +406,7 @@
       el.style.pointerEvents = 'none';
       el.style.zIndex = '999';
       el.style.willChange = 'transform, opacity';
+      el.setAttribute('aria-hidden', 'true');
       document.body.appendChild(el);
       const angle = Math.random() * Math.PI * 2;
       const dist = 70 + Math.random() * 110;
@@ -383,9 +427,13 @@
     optsEl.querySelectorAll('.poll-opt').forEach((b) => { b.disabled = true; });
     socket.emit('castVote', { code: currentCode, index });
     burst();
+    announce('Oyunuz kaydedildi. Sonuçlar gösteriliyor.');
   }
 
   socket.on('init', (data) => {
+    // Voting closed by the owner (not by our own countdown reaching zero,
+    // which announces itself): tell screen-reader users.
+    const closedNow = currentCode === data.code && votingOpen && !data.voting.open;
     currentCode = data.code;
     options = data.options;
     // The server says whether this browser already voted in the current
@@ -397,8 +445,13 @@
     poll.toggleAttribute('data-voted', revealed());
     renderOptions(data.votes || {});
     votingTimer.set(data.voting);
+    const justJoined = !poll.hasAttribute('data-active');
     poll.setAttribute('data-active', '');
     form.style.display = 'none';
+    // Keyboard and screen-reader users land on the question, not on a form
+    // that has just disappeared.
+    if (justJoined) questionEl.focus();
+    if (closedNow) announce('Oylama kapandı. Sonuçlar gösteriliyor.');
   });
 
   socket.on('updateVotes', (votes) => {
