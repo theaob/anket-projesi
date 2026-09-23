@@ -9,8 +9,8 @@
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   :root {
-    --ink: #2a2840; --muted: #8a87a0; --line: #ece9f7; --track: #f1eff8;
-    --accent: #8b3fe0; --brand: linear-gradient(90deg, #ff7a2e, #ff3d5e, #a855f7, #5b52e8);
+    --ink: #2a2840; --muted: #6b6880; --line: #ece9f7; --track: #f1eff8;
+    --accent: #8b3fe0; --brand: linear-gradient(90deg, #ea580c, #ff3d5e, #a855f7, #5b52e8);
   }
   html, body { height: 100%; }
   body {
@@ -78,7 +78,9 @@
     text-transform: uppercase; letter-spacing: .1em; }
   .countdown.urgent { color: #ff3d5e; animation: tick 1s ease-in-out infinite; }
   @keyframes tick { 50% { transform: scale(1.06); } }
-  .voting-closed .qr, .voting-closed .url, .voting-closed .or, .voting-closed .code { opacity: .25; filter: grayscale(1); }
+  /* Closed: fade the QR code, but keep the text readable (muted, not faded). */
+  .voting-closed .qr { opacity: .25; filter: grayscale(1); }
+  .voting-closed .code { background: none; color: var(--muted); }
   .voting-closed .join h2 { color: #ff3d5e; }
   .voting-closed .live { color: var(--muted); }
   .voting-closed .live::before { background: #c9c7d6; animation: none; }
@@ -118,8 +120,8 @@
 </style>
 </head>
 <body>
-<div class="blob blob-a"></div>
-<div class="blob blob-b"></div>
+<div class="blob blob-a" aria-hidden="true"></div>
+<div class="blob blob-b" aria-hidden="true"></div>
 
 <div class="controls" id="controls">
   <button type="button" id="btn-hide">Sonuçları gizle<kbd>H</kbd></button>

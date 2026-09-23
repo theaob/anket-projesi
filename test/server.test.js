@@ -169,7 +169,7 @@ describe('CSV export', () => {
     it('neutralises spreadsheet formulas in option text', async () => {
         const { owner, code } = await createPoll(server.url, 'Q', ['=HYPERLINK("http://x","y")', '+1', '-2', '@SUM(A1)', 'normal "quoted"']);
         const { csv } = await call(owner, 'exportCsv', code);
-        assert.match(csv, /^﻿/);
+        assert.match(csv, /^\uFEFF/);
         assert.ok(csv.includes(`"'=HYPERLINK(""http://x"",""y"")",0`));
         assert.ok(csv.includes(`"'+1",0`));
         assert.ok(csv.includes(`"'-2",0`));

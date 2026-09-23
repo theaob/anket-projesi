@@ -8,7 +8,7 @@
         try { return JSON.parse(localStorage.getItem('myPolls')) || []; } catch (e) { return []; }
     }
     function saveMyPolls(list) {
-        try { localStorage.setItem('myPolls', JSON.stringify(list)); } catch (e) {}
+        try { localStorage.setItem('myPolls', JSON.stringify(list)); } catch (e) { /* storage blocked: the list is only a convenience */ }
     }
     function rememberPoll(p) {
         const list = loadMyPolls().filter(item => item.secret !== secret);
@@ -79,6 +79,7 @@
         const input = document.createElement('input');
         input.type = 'text';
         input.placeholder = 'Seçenek...';
+        input.setAttribute('aria-label', 'Seçenek');
         input.maxLength = 200;
         input.value = text;
         const remove = document.createElement('button');

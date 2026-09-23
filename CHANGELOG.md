@@ -10,11 +10,17 @@ ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 - **Docker imajı yetkisiz kullanıcıyla çalışıyor**: Sunucu artık `root` yerine `node` kullanıcısıyla çalışıyor. v2.0.0 ile oluşturulmuş veri volume'lerinin sahipliği açılışta otomatik olarak düzeltiliyor.
 
 ### Eklendi
+- **Erişilebilirlik**: Tüm sayfalar axe-core denetiminde WCAG 2 A/AA ihlali vermiyor. Metin ve düğme renkleri 4.5:1 kontrasta (başlık gradyanı büyük yazı için 3:1'e) getirildi; tüm denetimlerde klavye odak halkası var; bağlantı alanlarının etiketleri, sayfa başlıkları ve `<main>` bölgeleri eklendi. Oy ekranında sonuç düğmeleri ekran okuyucuya "Evet: %60, 3 oy" gibi okunuyor, oy kaydı ve oylamanın kapanması duyuruluyor (geri sayım her saniye okunmuyor), ankete katılınca odak soruya geçiyor; dekoratif emoji efektleri ekran okuyucudan gizlendi.
+- **ESLint**: `npm run lint`; CI'da testlerle birlikte çalışıyor.
+- **Güvenli sürüm betiği**: `npm run release:*` artık yalnızca `main` dalında, temiz ve GitHub ile eşit bir çalışma kopyasında ve CHANGELOG'da yeni sürümün bölümü varken sürüm çıkarıyor; `-- --dry-run` ile yalnızca kontrol eder.
 - **Otomatik testler ve CI**: Sunucu için entegrasyon testleri (`npm test`; kimlik doğrulama, tek oy, oylama aç/kapat, CSV, dayanıklılık, kalıcılık, hız sınırları). GitHub Actions'ta her push ve pull request'te testler çalışıyor ve Docker imajı derlenip duman testinden geçiriliyor.
 - **`/healthz` ve Docker `HEALTHCHECK`**.
 - **`PORT` ortam değişkeni** (varsayılan `3000`).
 
 ### Değiştirildi
+- Ana sayfadaki başlık animasyonu yalnızca görünürken çalışıyor: bir ankete katılınca veya başlık ekrandan kaydırılınca duruyor (telefonlarda pil tasarrufu).
+- README güncellendi: yeni başlık ve açıklama (kapalı ağ ve internet kullanımı), CI rozeti, sürüm çıkarma adımları.
+- `package.json`: paket adı `anket-projesi` oldu ve `"private": true` eklendi.
 - **Canlı güncellemeler toplu gönderiliyor**: Her oyda tüm katılımcılara, yöneticilere ve sunum ekranlarına ayrı ayrı mesaj gitmesi yerine güncellemeler anket başına en fazla 250 ms'de bir, en son durumu taşıyarak gönderiliyor. İlk değişiklik anında gider, hiçbir güncelleme kaybolmaz. Kalabalık salonlarda sunucu ve ağ yükü büyük ölçüde azalıyor.
 - **"Oy vermeden ayrılan" sayısı kısa kopmaları saymıyor**: Ziyaretçi ancak 10 saniye geri dönmezse ayrılmış sayılıyor; sayfa yenileme veya kısa bağlantı kopması sayıyı artırmıyor. Süre dolduğunda yönetim sayfası kendiliğinden güncelleniyor.
 - Docker derlemesi `package-lock.json` ile `npm ci` kullanıyor; bağımlılık sürümleri artık sabit.

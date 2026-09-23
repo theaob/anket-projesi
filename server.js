@@ -441,7 +441,7 @@ const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
 // that no phone in the room can reach, so loopback hosts become the LAN IP.
 function joinUrl(protocol, host, code) {
     if (PUBLIC_URL) return `${PUBLIC_URL}/?code=${code}`;
-    const valid = typeof host === 'string' && /^[A-Za-z0-9.\-]+(:\d+)?$|^\[[0-9A-Fa-f:.]+\](:\d+)?$/.test(host);
+    const valid = typeof host === 'string' && /^[A-Za-z0-9.-]+(:\d+)?$|^\[[0-9A-Fa-f:.]+\](:\d+)?$/.test(host);
     const loopback = !valid || /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?$/.test(host);
     const origin = loopback ? `${localIp}:${host?.match(/:(\d+)$/)?.[1] || PORT}` : host;
     return `${loopback || protocol !== 'https' ? 'http' : 'https'}://${origin}/?code=${code}`;

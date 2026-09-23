@@ -45,9 +45,13 @@ input {
 
 button {
     width: 100%; padding: 14px; margin: 10px 0; border-radius: 14px; border: none;
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    /* Darker than --primary/--secondary so white text keeps a 4.5:1 contrast. */
+    background: linear-gradient(135deg, #4f46e5, #7e22ce);
     color: white; font-weight: 700; cursor: pointer; transition: 0.3s;
 }
+
+/* A visible focus ring for keyboard users on every control. */
+:focus-visible { outline: 3px solid #7e22ce; outline-offset: 2px; }
 
 button:active { transform: scale(0.96); }
 
