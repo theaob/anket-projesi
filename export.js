@@ -14,7 +14,7 @@ const MAX_BUCKETS = 40;
 const JSON_FORMAT = 'anket-projesi/poll';
 
 // poll: the live poll; details: db.exportDetails(); stats: { abandoned,
-// connected, voting: { open, closesAt } }; tzOffset: the client's
+// connected, voting: { phase, opensAt, closesAt } }; tzOffset: the client's
 // Date#getTimezoneOffset(), used to align buckets and write local times.
 function buildReport(poll, details, stats, tzOffset = 0) {
     const totalVotes = poll.votes.reduce((a, b) => a + b, 0);
@@ -77,8 +77,9 @@ const excelDate = (ms, tzOffset) => (ms === null ? null : localMs(ms, tzOffset) 
 const isoText = (ms) => (ms === null ? null : new Date(ms).toISOString());
 
 function votingText(voting) {
-    if (!voting.open) return 'Kapalı';
-    return voting.closesAt ? 'Açık (süreli)' : 'Açık';
+    if (voting.phase === 'closed') return 'Kapalı';
+    if (voting.phase === 'scheduled') return 'Planlandı (henüz başlamadı)';
+    return voting.closesAt ? 'Açık (bitiş zamanı var)' : 'Açık';
 }
 
 function fileName(report, ext) {
@@ -102,6 +103,8 @@ function toXlsx(report) {
             [{ v: 'Oluşturulma', style: 'bold' }, date(report.createdAt)],
             [{ v: 'Rapor tarihi', style: 'bold' }, date(report.exportedAt)],
             [{ v: 'Oylama', style: 'bold' }, votingText(report.voting)],
+            ...(report.voting.opensAt ? [[{ v: 'Başlangıç', style: 'bold' }, date(report.voting.opensAt)]] : []),
+            ...(report.voting.closesAt ? [[{ v: 'Bitiş', style: 'bold' }, date(report.voting.closesAt)]] : []),
             [],
             [{ v: 'Katılım', style: 'header' }, { v: '', style: 'header' }],
             ['Ziyaretçi', f.visitors],
@@ -182,6 +185,8 @@ function toCsv(report) {
         ['Anket kodu', report.code],
         ['Rapor tarihi', localText(report.exportedAt, tz)],
         ['Oylama', votingText(report.voting)],
+        ...(report.voting.opensAt ? [['Başlangıç', localText(report.voting.opensAt, tz)]] : []),
+        ...(report.voting.closesAt ? [['Bitiş', localText(report.voting.closesAt, tz)]] : []),
         [],
         ['Seçenek', 'Oy', 'Yüzde'],
         ...report.options.map(o => [o.text, o.votes, pct(o.share)]),
@@ -214,6 +219,8 @@ function toJson(report) {
             code: report.code,
             createdAt: isoText(report.createdAt),
             voting: votingText(report.voting),
+            opensAt: isoText(report.voting.opensAt ?? null),
+            closesAt: isoText(report.voting.closesAt ?? null),
             options: report.options.map(o => ({ text: o.text, votes: o.votes })),
             totalVotes: report.totalVotes,
             visitors: report.funnel.visitors,

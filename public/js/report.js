@@ -28,8 +28,10 @@
   function render(r) {
     document.title = `${r.code} · Anket Raporu`;
     $('question').textContent = r.question;
-    const status = !r.voting.open ? 'Kapalı' : r.voting.closesAt ? 'Açık (süreli)' : 'Açık';
+    const status = { closed: 'Kapalı', scheduled: 'Planlandı', open: 'Açık' }[r.voting.phase];
     const meta = [['Kod', r.code], ['Oylama', status], ['Rapor', dateTime(r.exportedAt)]];
+    if (r.voting.closesAt) meta.splice(2, 0, ['Bitiş', dateTime(r.voting.closesAt)]);
+    if (r.voting.opensAt) meta.splice(2, 0, ['Başlangıç', dateTime(r.voting.opensAt)]);
     if (r.createdAt) meta.splice(2, 0, ['Oluşturulma', dateTime(r.createdAt)]);
     $('meta').replaceChildren(...meta.map(([k, v]) => el('span', {}, k + ': ', el('strong', { textContent: v }))));
 

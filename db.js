@@ -62,6 +62,12 @@ CREATE TABLE settings (
     value TEXT NOT NULL
 );
 `,
+    // 5: scheduled start. `opens_at` is when voting opens by itself, in ms
+    // since the epoch (NULL: no scheduled start). `closes_at` may now be any
+    // chosen end date and time, not just a countdown.
+    `
+ALTER TABLE polls ADD COLUMN opens_at INTEGER;
+`,
 ];
 const SCHEMA_VERSION = MIGRATIONS.length;
 
@@ -84,7 +90,7 @@ function openDatabase(dataDir) {
     const stmt = {
         insertPoll: db.prepare('INSERT INTO polls (code, question, manage_hash) VALUES (?, ?, ?)'),
         codeByManageHash: db.prepare('SELECT code FROM polls WHERE manage_hash = ?'),
-        setVoting: db.prepare('UPDATE polls SET closed = ?, closes_at = ? WHERE code = ?'),
+        setVoting: db.prepare('UPDATE polls SET closed = ?, opens_at = ?, closes_at = ? WHERE code = ?'),
         getSetting: db.prepare('SELECT value FROM settings WHERE key = ?'),
         insertSetting: db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)'),
         updateQuestion: db.prepare("UPDATE polls SET question = ?, updated_at = datetime('now') WHERE code = ?"),
@@ -97,7 +103,7 @@ function openDatabase(dataDir) {
         deleteVotes: db.prepare('DELETE FROM votes WHERE poll_code = ?'),
         pollCreatedAt: db.prepare('SELECT created_at FROM polls WHERE code = ?'),
         voteTimes: db.prepare('SELECT position, created_at FROM votes WHERE poll_code = ? ORDER BY created_at, rowid'),
-        allPolls: db.prepare('SELECT code, question, closed, closes_at FROM polls ORDER BY created_at, code'),
+        allPolls: db.prepare('SELECT code, question, closed, opens_at, closes_at FROM polls ORDER BY created_at, code'),
         allOptions: db.prepare('SELECT poll_code, position, text FROM options ORDER BY poll_code, position'),
         allVisitors: db.prepare(`
             SELECT v.poll_code, v.voter_id, vo.position
@@ -107,13 +113,13 @@ function openDatabase(dataDir) {
 
     return {
         // Returns every poll as { code, question, options, votes, visitors,
-        // closed, closesAt } where visitors is Map<voterId, { voted, choice }>.
+        // closed, opensAt, closesAt } where visitors is Map<voterId, { voted, choice }>.
         loadAll() {
             const polls = new Map();
             for (const p of stmt.allPolls.all()) {
                 polls.set(p.code, {
                     code: p.code, question: p.question, options: [], votes: [], visitors: new Map(),
-                    closed: p.closed === 1, closesAt: p.closes_at
+                    closed: p.closed === 1, opensAt: p.opens_at, closesAt: p.closes_at
                 });
             }
             for (const o of stmt.allOptions.all()) {
@@ -152,9 +158,10 @@ function openDatabase(dataDir) {
             });
         },
 
-        // closed: voting is shut; closesAt: timer deadline (ms) or null.
-        setVoting(code, closed, closesAt) {
-            stmt.setVoting.run(closed ? 1 : 0, closesAt, code);
+        // closed: voting is shut; opensAt / closesAt: scheduled start and end
+        // (ms) or null.
+        setVoting(code, closed, opensAt, closesAt) {
+            stmt.setVoting.run(closed ? 1 : 0, opensAt, closesAt, code);
         },
 
         deletePoll(code) {

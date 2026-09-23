@@ -87,7 +87,8 @@
   .voting-closed .code { background: none; color: var(--muted); }
   .voting-closed .join h2 { color: #ff3d5e; }
   .voting-closed .live { color: var(--muted); }
-  .voting-closed .live::before { background: #c9c7d6; animation: none; }
+  .voting-closed .live::before, .voting-scheduled .live::before { background: #c9c7d6; animation: none; }
+  .voting-scheduled .live { color: var(--muted); }
   .code { font-weight: 900; font-size: clamp(40px, 5vw, 92px); letter-spacing: .12em; line-height: 1; font-feature-settings: "tnum" 1;
     background: var(--brand); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
@@ -147,7 +148,7 @@
   </section>
 
   <aside class="join">
-    <div class="countdown" id="countdown" role="timer" hidden><small>Kalan süre</small><span id="countdown-text"></span></div>
+    <div class="countdown" id="countdown" role="timer" hidden><small id="countdown-label">Kalan süre</small><span id="countdown-text"></span></div>
     <h2 id="join-title">Katılmak için tarayın</h2>
     <img class="qr" id="qr" alt="Ankete katılım QR kodu" />
     <p class="url" id="join-url"></p>

@@ -162,6 +162,126 @@ describe('voting', () => {
     });
 });
 
+describe('scheduled voting', () => {
+    let server;
+    before(async () => { server = await startServer(); });
+    after(() => server.stop());
+
+    // Resolves with the first managePoll update whose voting phase matches.
+    const phaseUpdate = (owner, phase) => new Promise((resolve) => {
+        const handler = (p) => {
+            if (p.voting.phase === phase) { owner.off('managePoll', handler); resolve(p); }
+        };
+        owner.on('managePoll', handler);
+    });
+
+    it('opens and closes voting at the scheduled times', async () => {
+        const { owner, code, state } = await createPoll(server.url, 'Planlı', ['A', 'B']);
+        const opensAt = Date.now() + 1500;
+        const closesAt = opensAt + 5500;
+        assert.deepEqual(await call(owner, 'setSchedule', { code, opensAt, closesAt }), { ok: true });
+
+        const { socket, poll } = await joinAsVoter(server.url, code, (await voterCookie(server.url)).cookie);
+        assert.equal(poll.voting.phase, 'scheduled');
+        assert.equal(poll.voting.open, false);
+        assert.equal(poll.voting.opensAt, opensAt);
+        assert.equal(poll.voting.closesAt, closesAt);
+        assert.ok(poll.voting.startsInMs > 0 && poll.voting.startsInMs <= 1500);
+        // Too early: the vote is refused.
+        socket.emit('castVote', { code, index: 0 });
+        await wait(150);
+        assert.deepEqual((await state()).votes, [0, 0]);
+
+        const opened = await phaseUpdate(owner, 'open');
+        assert.ok(Date.now() >= opensAt);
+        assert.ok(opened.voting.remainingMs > 4000);
+        socket.emit('castVote', { code, index: 1 });
+        const counted = await new Promise((resolve) => {
+            owner.on('managePoll', (p) => { if (p.votes[1] === 1) resolve(p); });
+        });
+        assert.deepEqual(counted.votes, [0, 1]);
+
+        const closed = await phaseUpdate(owner, 'closed');
+        assert.ok(Date.now() >= closesAt);
+        assert.equal(closed.voting.open, false);
+        socket.close(); owner.close();
+    });
+
+    it('rejects invalid schedules and outsiders', async () => {
+        const { owner, code } = await createPoll(server.url);
+        const now = Date.now();
+        const day = 24 * 60 * 60 * 1000;
+        for (const payload of [
+            { opensAt: null, closesAt: null },
+            { closesAt: now - 1000 },
+            { opensAt: now + 60000, closesAt: now + 30000 },
+            { opensAt: now + 400 * day },
+            { closesAt: 'tomorrow' },
+            { closesAt: now + 1.5 },
+            { opensAt: {} }
+        ]) {
+            assert.ok((await call(owner, 'setSchedule', { code, ...payload })).error, JSON.stringify(payload));
+        }
+        const stranger = await connect(server.url);
+        assert.ok((await call(stranger, 'setSchedule', { code, closesAt: now + day })).error);
+        const { poll } = await joinAsVoter(server.url, code, (await voterCookie(server.url)).cookie);
+        assert.equal(poll.voting.phase, 'open');
+        assert.equal(poll.voting.closesAt, null);
+        stranger.close(); owner.close();
+    });
+
+    it('handles end dates further ahead than a timer can wait', async () => {
+        const { owner, code } = await createPoll(server.url);
+        const closesAt = Date.now() + 40 * 24 * 60 * 60 * 1000;
+        assert.deepEqual(await call(owner, 'setSchedule', { code, closesAt }), { ok: true });
+        await wait(300);
+        const { poll, socket } = await joinAsVoter(server.url, code, (await voterCookie(server.url)).cookie);
+        assert.equal(poll.voting.phase, 'open');
+        assert.equal(poll.voting.closesAt, closesAt);
+        assert.ok(!server.output().includes('TimeoutOverflowWarning'));
+        socket.close(); owner.close();
+    });
+
+    it('keeps the schedule across a restart and opens a start that passed meanwhile', async () => {
+        const later = await createPoll(server.url);
+        const opensAt = Date.now() + 60 * 60 * 1000;
+        await call(later.owner, 'setSchedule', { code: later.code, opensAt });
+        const soon = await createPoll(server.url);
+        const soonOpensAt = Date.now() + 1000;
+        const soonClosesAt = Date.now() + 60 * 60 * 1000;
+        await call(soon.owner, 'setSchedule', { code: soon.code, opensAt: soonOpensAt, closesAt: soonClosesAt });
+        later.owner.close(); soon.owner.close();
+
+        await server.restart();
+        await wait(Math.max(0, soonOpensAt - Date.now()) + 200);
+
+        const o = await connect(server.url);
+        assert.equal((await call(o, 'manage', later.secret)).poll.voting.phase, 'scheduled');
+        assert.equal((await call(o, 'manage', later.secret)).poll.voting.opensAt, opensAt);
+        const reopened = (await call(o, 'manage', soon.secret)).poll.voting;
+        assert.equal(reopened.phase, 'open');
+        assert.equal(reopened.closesAt, soonClosesAt);
+        o.close();
+    });
+
+    it('lets manual controls override a schedule', async () => {
+        const { owner, code, secret } = await createPoll(server.url);
+        await call(owner, 'setSchedule', { code, opensAt: Date.now() + 60000, closesAt: Date.now() + 120000 });
+        owner.emit('setVoting', { code, open: true });
+        await wait(150);
+        let { voting } = (await call(owner, 'manage', secret)).poll;
+        assert.equal(voting.phase, 'open');
+        assert.equal(voting.closesAt, null);
+        await call(owner, 'setSchedule', { code, opensAt: Date.now() + 60000 });
+        owner.emit('setVoting', { code, open: false });
+        await wait(150);
+        ({ voting } = (await call(owner, 'manage', secret)).poll);
+        assert.equal(voting.phase, 'closed');
+        assert.equal(voting.opensAt, null);
+        owner.close();
+    });
+});
+
 // Reads a ZIP archive (as written by xlsx.js: sizes in the local headers)
 // into { name: text }.
 function unzip(buf) {
@@ -298,7 +418,7 @@ describe('robustness', () => {
         const junk = [undefined, null, 0, 1e308, '', 'x'.repeat(5000), [], {}, { code: {} },
             { code, options: [{}, 5, null] }, { code, index: 1.5 }, true];
         for (const event of ['createPoll', 'manage', 'updatePoll', 'deletePoll', 'resetVotes', 'setVoting',
-            'exportPoll', 'joinPoll', 'watchPoll', 'castVote', 'react']) {
+            'exportPoll', 'setSchedule', 'joinPoll', 'watchPoll', 'castVote', 'react']) {
             for (const payload of junk) { s.emit(event, payload); s.emit(event, payload, payload); }
         }
         await wait(500);

@@ -124,18 +124,72 @@
     }
 
     // Voting state as last reported by the countdown.
-    let voting = { open: true, remainingMs: null };
+    let voting = { phase: 'open', open: true, remainingMs: null, opensAt: null, closesAt: null };
     const votingTimer = VotingTimer.create((state) => {
         voting = state;
         const timed = state.open && state.remainingMs !== null;
         const status = $('voting-status');
-        status.classList.toggle('closed', !state.open);
+        status.classList.toggle('closed', state.phase !== 'open');
         status.classList.toggle('urgent', timed && state.remainingMs <= 10000);
-        status.textContent = !state.open ? 'Oylama kapalı' : timed ? `Oylama açık · ${state.text} kaldı` : 'Oylama açık';
+        const end = state.closesAt ? `, bitiş ${VotingTimer.formatDate(state.closesAt)}` : '';
+        if (state.phase === 'closed') status.textContent = 'Oylama kapalı';
+        else if (state.phase === 'scheduled') {
+            status.textContent = `Planlandı · ${VotingTimer.formatDate(state.opensAt)} başlangıç`
+                + (state.startsInMs > 0 ? ` (${state.text} sonra)` : '') + end;
+        } else status.textContent = timed ? `Oylama açık · ${state.text} kaldı${state.remainingMs > 3600000 ? end : ''}` : 'Oylama açık';
         const toggle = $('btn-voting');
-        toggle.textContent = state.open ? '■ Oylamayı kapat' : '▶ Oylamayı aç';
-        toggle.className = state.open ? 'btn-close' : 'btn-open';
+        toggle.textContent = { open: '■ Oylamayı kapat', scheduled: '▶ Şimdi başlat', closed: '▶ Oylamayı aç' }[state.phase];
+        toggle.className = state.phase === 'open' ? 'btn-close' : 'btn-open';
         $('timer-running').hidden = !timed;
+    });
+
+    // ── Scheduling by date and time ──────────────────────────
+    // datetime-local inputs work in this device's local time.
+    function toInputValue(ms) {
+        if (!ms) return '';
+        const d = new Date(ms);
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    function fromInputValue(value) {
+        if (!value) return null;
+        const ms = new Date(value).getTime();
+        return Number.isNaN(ms) ? undefined : ms;
+    }
+
+    // Shows the saved schedule in the form, unless the owner is editing it.
+    let scheduleDirty = false;
+    function fillSchedule(v) {
+        $('sched-start').min = $('sched-end').min = toInputValue(Date.now());
+        if (scheduleDirty) return;
+        $('sched-start').value = toInputValue(v.phase === 'scheduled' ? v.opensAt : null);
+        $('sched-end').value = toInputValue(v.phase !== 'closed' ? v.closesAt : null);
+    }
+    ['sched-start', 'sched-end'].forEach((id) => $(id).addEventListener('input', () => { scheduleDirty = true; }));
+
+    function saveSchedule(opensAt, closesAt, onDone) {
+        socket.emit('setSchedule', { code: poll.code, opensAt, closesAt }, (res) => {
+            $('schedule-status').textContent = res.error || '';
+            if (onDone) onDone(res);
+        });
+    }
+
+    $('schedule-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (!poll) return;
+        const opensAt = fromInputValue($('sched-start').value);
+        const closesAt = fromInputValue($('sched-end').value);
+        if (opensAt === undefined || closesAt === undefined) {
+            $('schedule-status').textContent = 'Tarih ve saati eksiksiz girin.';
+            return;
+        }
+        saveSchedule(opensAt, closesAt, (res) => {
+            if (res.error) return;
+            scheduleDirty = false;
+            $('schedule-status').textContent = opensAt && opensAt > Date.now()
+                ? `Plan kaydedildi. Oylama kendiliğinden açılacak: ${VotingTimer.formatDate(opensAt)}.`
+                : 'Plan kaydedildi.';
+        });
     });
 
     function setVoting(open, seconds) {
@@ -155,6 +209,7 @@
         renderStats();
         renderResults();
         votingTimer.set(p.voting);
+        fillSchedule(p.voting);
         if (refillEditor) fillEditor();
         rememberPoll(p);
     }
@@ -189,13 +244,17 @@
 
     $('btn-add').addEventListener('click', () => addOption());
 
-    $('btn-voting').addEventListener('click', () => setVoting(!voting.open));
+    // "Start now" on a scheduled poll keeps its end time.
+    $('btn-voting').addEventListener('click', () => {
+        if (voting.phase === 'scheduled' && voting.closesAt) saveSchedule(null, voting.closesAt);
+        else setVoting(voting.phase !== 'open');
+    });
     document.querySelectorAll('#timer-presets button').forEach((btn) => {
         btn.addEventListener('click', () => setVoting(true, Number(btn.dataset.seconds)));
     });
+    // Moves the end 30 seconds later, whether it came from a countdown or a date.
     $('btn-extend').addEventListener('click', () => {
-        if (voting.remainingMs === null) return;
-        setVoting(true, Math.min(3600, Math.ceil(voting.remainingMs / 1000) + 30));
+        if (poll && voting.closesAt) saveSchedule(null, voting.closesAt + 30000);
     });
     $('btn-untimed').addEventListener('click', () => setVoting(true));
 

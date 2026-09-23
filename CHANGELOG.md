@@ -10,6 +10,12 @@ ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 - **Docker imajı yetkisiz kullanıcıyla çalışıyor**: Sunucu artık `root` yerine `node` kullanıcısıyla çalışıyor. v2.0.0 ile oluşturulmuş veri volume'lerinin sahipliği açılışta otomatik olarak düzeltiliyor.
 
 ### Eklendi
+- **Tarih ve saatle planlanan oylama**: Yönetim sayfasındaki "Tarih ve saatle planla" ile oylamanın başlangıç ve/veya bitiş tarih ve saati seçilebiliyor (en fazla bir yıl sonrası; saatler yöneticinin cihazının saat diliminde).
+  - Başlangıçtan önce katılımcılar anketi görüyor ama oy veremiyor; oy ekranında ve sunum ekranında başlangıç saati ve başlamasına kalan süre gösteriliyor. Başlangıç zamanı gelince oylama kendiliğinden açılıyor (ekran okuyucuya "Oylama başladı" duyuruluyor), bitişte kapanıyor.
+  - Geri sayımlar artık saat ve günleri de gösteriyor (ör. `1:02:09`, `3 g 4 sa`); bitişi bir saatten uzak olan oylamalarda bitiş tarihi gösteriliyor.
+  - "Şimdi başlat" planlanmış bir oylamayı bitiş zamanını koruyarak hemen açıyor; "+30 sn" tarihle belirlenmiş bitişlerde de çalışıyor; elle kapatmak planı kaldırıyor.
+  - Plan sunucu yeniden başlatılsa da korunuyor; sunucu kapalıyken başlangıç zamanı geçtiyse açılışta oylama açılıyor. 24 günden uzak tarihler de doğru işleniyor.
+  - Dışa aktarmalar ve PDF raporu başlangıç ve bitiş zamanını da içeriyor.
 - **Zengin dışa aktarma**: Yönetim sayfasında yeni "Dışa aktar" bölümü.
   - **Excel (.xlsx)**: Özet (soru, tarihler, oylama durumu, ziyaretçi / oy veren / oy vermeden ayrılan / bağlı, katılım oranı, ilk ve son oy), sonuçlar ve yerleşik çubuk grafik, her oyun saati ve seçeneği (katılımcı kimliği olmadan), zaman çizelgesi ve sütun grafik. Saatler indiren cihazın saat diliminde. Harici kütüphane kullanılmıyor.
   - **PDF raporu**: Özet kutuları, sonuç çubukları, zamana göre oy grafiği ve sonuç tablosu içeren yazdırılabilir sayfa (`/report#…`); "PDF olarak kaydet / Yazdır" ile PDF alınır. Yalnızca yönetim bağlantısına sahip olanlar açabilir.

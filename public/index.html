@@ -85,6 +85,9 @@
     overflow: hidden; transition: transform .15s ease; }
   .poll-opt:hover { transform: translateX(3px); }
   .poll-opt:disabled { cursor: default; }
+  /* Before a scheduled start the options are shown but can't be chosen yet. */
+  .poll[data-phase="scheduled"] .poll-opt { opacity: .55; }
+  .poll[data-phase="scheduled"] .poll-opt:hover { transform: none; }
   .poll-opt .fill { position: absolute; inset: 0; width: 0%; z-index: 0;
     background: linear-gradient(90deg, rgba(91, 82, 232, 0.18), rgba(168, 85, 247, 0.28));
     transition: width .7s cubic-bezier(.2,.8,.2,1); transition-delay: var(--bardelay, 0s); }
