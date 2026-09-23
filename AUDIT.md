@@ -3,7 +3,7 @@
 **Date:** 2026-09-22
 **Scope:** `server.js`, `public/index.html`, `public/admin.html`, `public/style.css`, `Dockerfile`, `.github/workflows/*`, `package.json`, `README.md`, `CHANGELOG.md`
 
-> **Status update:** All critical and high findings are resolved: C1, C3, C4 and H1–H5 are fixed, and C2 no longer applies because the shared admin panel was replaced by a secret manage link for each poll. M2 and M4 are fixed and most of M3. See the ✅ notes below.
+> **Status update (after v2.0.0):** all critical and high findings are resolved (C2 no longer applies, since the shared admin panel was replaced by per-poll manage links). Of the medium findings, only M3 and M5 are partly open. Of the low findings, L1, L5, L6 and L9 are still open. The server now has an integration test suite that runs in CI on every push and pull request, together with a Docker smoke test. See the ✅ notes below.
 
 Findings marked **(verified)** were reproduced against a running server or checked on GitHub. The others come from reading the code.
 
@@ -109,27 +109,27 @@ Socket.IO reconnects with a new socket that has no rooms. `index.html` only join
 
 | # | Finding | Location | Suggested fix |
 |---|---|---|---|
-| M1 | **CSV formula injection.** An option starting with `=`, `+`, `-` or `@` runs as a formula when the file is opened in Excel. | `server.js:52` | Prefix such cells with `'`. |
+| M1 | ✅ fixed — **CSV formula injection.** An option starting with `=`, `+`, `-` or `@` runs as a formula when the file is opened in Excel. | `server.js:52` | Prefix such cells with `'`. |
 | M2 | ✅ fixed — **Voters get locked out after a reset or a new question.** The `voted_<code>` flag in `localStorage` is never cleared, so after `resetVotes` or `updatePoll` earlier voters can't vote on the new question. | `index.html:346,358,384` | Give each poll a `version` or `round` ID that changes on reset or edit, and key the flag on `code+round`. |
 | M3 | ✅ mostly fixed — **Metrics are easy to inflate or skew.** Repeated `joinPoll` calls on one socket count as many visits. A page refresh counts as one abandonment plus one new visit. If a socket joins two polls, only the last one is tracked. | `server.js:105-146` | Count each socket or device once per poll, and ignore a quick reconnect from the same device. |
 | M4 | ✅ fixed — **Unvalidated vote index.** `index: "constructor"` passes the `!== undefined` check, so a `"constructor": NaN` key is written into `votes`. | `server.js:121` (verified) | Use `Number.isInteger(index) && index >= 0 && index < poll.options.length`, and store votes as an array. |
-| M5 | **Every vote sends all polls to all admins.** On each vote the server sends the full list of polls to every admin. With a big audience this floods the network. | `server.js:125` | Throttle to about 4 updates per second, or send only the changed poll. |
-| M6 | **Deleting a poll doesn't notify voters.** Voters stay on a poll that no longer exists. | `server.js:89` | Emit `pollClosed` to the `poll:<code>` room. |
-| M7 | **Docker image hygiene.** `node:18` is end-of-life (April 2025). `npm install --production` is deprecated. There is no lockfile, so builds aren't reproducible. There is no `.dockerignore`, so `COPY . .` also copies `.git`. The container runs as root and has no `HEALTHCHECK`. | `Dockerfile` | Use `node:22-alpine`, commit `package-lock.json` and run `npm ci --omit=dev`, add `.dockerignore`, add `USER node`, and add a `HEALTHCHECK`. |
-| M8 | **Workflow issues.** `auto-tag.yml` uses `actions/checkout@v3`, which runs on a deprecated Node version. The build job gets `contents: write` when it only needs read access. No workflow runs checks on PRs. | `.github/workflows/*` | Upgrade to `@v4`, give each job the least permissions it needs, and add a CI workflow (see L4). |
+| M5 | ✅ mostly fixed (shared admin panel removed; updates go only to that poll's managers and presenter screens, but are not throttled) — **Every vote sends all polls to all admins.** On each vote the server sends the full list of polls to every admin. With a big audience this floods the network. | `server.js:125` | Throttle to about 4 updates per second, or send only the changed poll. |
+| M6 | ✅ fixed — **Deleting a poll doesn't notify voters.** Voters stay on a poll that no longer exists. | `server.js:89` | Emit `pollClosed` to the `poll:<code>` room. |
+| M7 | ✅ fixed (Node 22, `npm ci` with a committed lockfile, `.dockerignore`, runs as `node`, `HEALTHCHECK`) — **Docker image hygiene.** `node:18` is end-of-life (April 2025). `npm install --production` is deprecated. There is no lockfile, so builds aren't reproducible. There is no `.dockerignore`, so `COPY . .` also copies `.git`. The container runs as root and has no `HEALTHCHECK`. | `Dockerfile` | Use `node:22-alpine`, commit `package-lock.json` and run `npm ci --omit=dev`, add `.dockerignore`, add `USER node`, and add a `HEALTHCHECK`. |
+| M8 | ✅ fixed (`checkout@v5`, read-only permissions except the release job, CI on push/PR). Still open: the Docker actions target Node 20, which GitHub is retiring. — **Workflow issues.** `auto-tag.yml` uses `actions/checkout@v3`, which runs on a deprecated Node version. The build job gets `contents: write` when it only needs read access. No workflow runs checks on PRs. | `.github/workflows/*` | Upgrade to `@v4`, give each job the least permissions it needs, and add a CI workflow (see L4). |
 
 ---
 
 ## 🔵 Low
 
 - **L1. The README is out of date.** It advertises "Weighted Scoring" (removed in 1.2.0) and a results screen that no longer exists. It doesn't mention poll codes, the `?code=` link or metrics. The "Mentimeter Clone" wording may raise trademark concerns.
-- **L2. Port and bind address are hard-coded.** `PORT = 3000` (`server.js:41`) should read `process.env.PORT`. `getLocalIp()` returns the first non-internal interface, which in Docker is the container IP, so the printed URL is misleading.
-- **L3. No `.gitignore`.** `node_modules/` can be committed by accident.
-- **L4. No tests, linting or formatting.** Add ESLint and Prettier, plus a few `node:test` + `socket.io-client` integration tests for create, vote, reset and export, and for the validation cases above. Run them in CI on PRs.
-- **L5. `package.json` gaps.** Add `"private": true` and `"engines": { "node": ">=20" }`, and make the `name` match the repo. The `release:*` scripts push `HEAD` from whatever branch is checked out; add a guard that only allows `main`.
+- ✅ fixed — **L2. Port and bind address are hard-coded.** `PORT = 3000` (`server.js:41`) should read `process.env.PORT`. `getLocalIp()` returns the first non-internal interface, which in Docker is the container IP, so the printed URL is misleading.
+- ✅ fixed — **L3. No `.gitignore`.** `node_modules/` can be committed by accident.
+- ✅ fixed (tests and CI; no linter or formatter yet) — **L4. No tests, linting or formatting.** Add ESLint and Prettier, plus a few `node:test` + `socket.io-client` integration tests for create, vote, reset and export, and for the validation cases above. Run them in CI on PRs.
+- *partly fixed (`engines` added)* — **L5. `package.json` gaps.** Add `"private": true` and `"engines": { "node": ">=20" }`, and make the `name` match the repo. The `release:*` scripts push `HEAD` from whatever branch is checked out; add a guard that only allows `main`.
 - **L6. The title animation never stops.** Two `requestAnimationFrame` loops in `index.html` run forever, even when the tab is in the background or the card is showing results. This drains battery on phones. Pause them on `visibilitychange` or once a poll is shown.
-- **L7. Code structure.** All voter JS and CSS is inline in `index.html` (406 lines), while `style.css` is used only by the admin page. Moving them into files helps with CSP (C3), caching and maintenance.
-- **L8. `localStorage` access isn't guarded.** It can throw (for example in some private-browsing modes or when storage is blocked), which would break voting. Wrap it in `try/catch`.
+- ✅ fixed (scripts moved to `public/js/`) — **L7. Code structure.** All voter JS and CSS is inline in `index.html` (406 lines), while `style.css` is used only by the admin page. Moving them into files helps with CSP (C3), caching and maintenance.
+- ✅ fixed — **L8. `localStorage` access isn't guarded.** It can throw (for example in some private-browsing modes or when storage is blocked), which would break voting. Wrap it in `try/catch`.
 - **L9. Accessibility.** Add a visible focus style to the option buttons, announce the result percentages to screen readers (`aria-label` on each bar), and check colour contrast on the gradient title.
 
 ---

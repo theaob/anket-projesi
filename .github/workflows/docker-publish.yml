@@ -6,15 +6,16 @@ on:
       - "v*.*.*"
   workflow_call:
 
+# Read-only by default; only the release job needs to write.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Read version from package.json
         id: pkg
@@ -49,7 +50,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Read version from package.json
         id: pkg

@@ -21,7 +21,8 @@ Kapalı ağlarda (Intranet) çalışmak üzere tasarlanmış, ultra profesyonel 
 ### Yerel Kurulum (Geliştirici Modu)
 1. Bağımlılıkları yükleyin: `npm install`
 2. Sunucuyu başlatın: `node server.js` (Node.js 22.13+)
-3. Tarayıcıda açın: `http://localhost:3000`
+3. Tarayıcıda açın: `http://localhost:3000` (port `PORT` ortam değişkeniyle değiştirilebilir)
+4. Testleri çalıştırın: `npm test` (her push ve pull request'te GitHub Actions'ta da çalışır)
 
 ## 🗳 Kullanım
 1. Ana sayfada **"Yeni anket oluştur"** düğmesine basın. Anketin yönetim sayfasına (`/manage#<gizli-anahtar>`) yönlendirilirsiniz.
@@ -52,6 +53,8 @@ docker build -t poll-app .
 docker run -d -p 80:3000 -v anket-data:/app/data --restart unless-stopped --name poll-system poll-app
 ```
 
+Konteyner içindeki sunucu yetkisiz `node` kullanıcısıyla çalışır (veri dizininin sahipliği açılışta otomatik düzeltilir). İmajda `/healthz` adresini yoklayan bir `HEALTHCHECK` vardır; `docker ps` konteynerin sağlık durumunu gösterir.
+
 ### Veri Kalıcılığı
 Anketler, seçenekler, ziyaretçiler ve oylar bir SQLite veritabanında (`data/anket.db`) saklanır ve sunucu yeniden başlatıldığında geri yüklenir. Konum `DATA_DIR` ortam değişkeniyle değiştirilebilir. Node.js'in yerleşik `node:sqlite` modülü kullanıldığı için ek bir veritabanı sunucusu veya derlenmesi gereken bir paket yoktur; **Node.js 22.13 veya üzeri** gerekir.
 
@@ -66,6 +69,7 @@ Uygulamayı internete doğrudan açmayın; önüne HTTPS sağlayan bir ters veki
 
 | Değişken | Açıklama |
 |---|---|
+| `PORT` | Sunucunun dinlediği port (varsayılan `3000`). |
 | `TRUST_PROXY` | Önünüzdeki vekil sayısı (genellikle `1`). Ayarlanmazsa tüm ziyaretçiler vekilin adresinden geliyor sayılır ve hız sınırlarını birlikte paylaşır; sunucu bu durumda günlüğe bir uyarı yazar. Vekil yokken **ayarlamayın**, yoksa istemciler sahte `X-Forwarded-For` başlığıyla sınırları aşabilir. |
 | `PUBLIC_URL` | Katılım bağlantıları ve QR kodu için genel adres, örn. `https://anket.example.com`. |
 | `VOTER_ID_BURST` | Bir ağdan art arda verilebilecek yeni katılımcı kimliği sayısı (varsayılan `30`). |

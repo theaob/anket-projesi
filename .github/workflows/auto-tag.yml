@@ -17,7 +17,7 @@ jobs:
       tag_created: ${{ steps.check_tag.outputs.EXISTS == 'false' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 

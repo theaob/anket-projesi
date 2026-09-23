@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Build image
+        run: docker build -t anket-app:ci .
+
+      - name: Smoke test the container
+        run: |
+          # A data volume left root-owned by v2.0.0 (which ran as root) must
+          # still be writable after the switch to the "node" user.
+          docker volume create anket-ci
+          docker run --rm -v anket-ci:/app/data alpine sh -c 'touch /app/data/left-by-root'
+
+          docker run -d --name anket -p 3000:3000 -v anket-ci:/app/data anket-app:ci
+          for i in $(seq 1 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' anket)" = healthy ] && break
+            sleep 2
+          done
+          test "$(docker inspect -f '{{.State.Health.Status}}' anket)" = healthy
+
+          curl -fsS http://127.0.0.1:3000/healthz
+          # A voter identity needs a database write.
+          curl -fsS -X POST -H 'Content-Type: application/json' -d '{}' http://127.0.0.1:3000/api/voter
+          # The server process runs as the unprivileged node user (uid 1000).
+          test "$(docker exec anket awk '/^Uid:/ {print $2}' /proc/1/status)" = 1000
+          test "$(docker exec anket stat -c %U /app/data/anket.db)" = node
+
+      - name: Container logs
+        if: always()
+        run: docker logs anket || true
