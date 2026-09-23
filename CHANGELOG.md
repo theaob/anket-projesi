@@ -5,6 +5,9 @@ ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 
 ## [Unreleased]
 
+### Düzeltildi
+- **Sunum ekranı**: "Sonuçları gizle" ve "Tam ekran" düğmeleri 1280×720 ve 1366×768 gibi 16:9 ekranlarda QR kod kartının üstüne biniyordu. Düğmeler artık sağ üst köşe yerine sonuçların altındaki bilgi satırında; fare hareketsizken yine gizleniyorlar.
+
 ## [2.1.0] - 2026-09-23
 
 ### Güvenlik
