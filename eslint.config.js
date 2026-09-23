@@ -16,7 +16,8 @@ module.exports = [
             globals: {
                 ...globals.browser,
                 io: 'readonly',          // /socket.io/socket.io.js
-                VotingTimer: 'readonly'  // public/js/voting-timer.js
+                VotingTimer: 'readonly', // public/js/voting-timer.js
+                Motion: 'readonly'       // public/js/motion.js
             }
         }
     },

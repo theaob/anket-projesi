@@ -261,6 +261,10 @@
             font-weight: 600;
             z-index: 10;
         }
+
+        @media (prefers-reduced-motion: reduce) {
+            .panel { animation: none; }
+        }
     </style>
 </head>
 
@@ -326,6 +330,7 @@
         </div>
     </main>
 
+    <script src="/js/motion.js"></script>
     <script src="/js/voting-timer.js"></script>
     <script src="/js/manage.js"></script>
 </body>

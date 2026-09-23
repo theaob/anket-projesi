@@ -5,6 +5,9 @@
   let hidden = false;
   let lastTotal = null;
   let current = null;
+  const formatInt = (v) => v.toLocaleString('tr-TR');
+  const formatPct = (v) => v + '%';
+  const formatVotes = (v) => v.toLocaleString('tr-TR') + ' oy';
 
   function showMessage(text) {
     $('stage').hidden = true;
@@ -25,6 +28,11 @@
       name.textContent = label;
       const num = document.createElement('span');
       num.className = 'opt-num';
+      const pct = document.createElement('span');
+      const count = document.createElement('small');
+      Motion.setNumber(pct, 0, formatPct);
+      Motion.setNumber(count, 0, formatVotes);
+      num.append(pct, count);
       head.append(name, num);
       const bar = document.createElement('div');
       bar.className = 'bar';
@@ -103,14 +111,14 @@
     const total = poll.votes.reduce((a, b) => a + b, 0);
     const max = Math.max(0, ...poll.votes);
     const pcts = poll.votes.map(count => (total ? Math.round(count / total * 100) : 0));
-    // Numbers first, synchronously: they affect row height, which fit() measures.
+    // Numbers first: they affect row height, which fit() measures. They count
+    // up to their new value; the widest text (100%) is short enough that the
+    // changing digits don't reflow the row.
     optionsEl.querySelectorAll('.opt').forEach((opt, i) => {
       const count = poll.votes[i] || 0;
-      const num = opt.querySelector('.opt-num');
-      num.textContent = pcts[i] + '%';
-      const small = document.createElement('small');
-      small.textContent = count.toLocaleString('tr-TR') + ' oy';
-      num.appendChild(small);
+      const [pctEl, countEl] = opt.querySelector('.opt-num').children;
+      Motion.tweenNumber(pctEl, pcts[i], formatPct);
+      Motion.tweenNumber(countEl, count, formatVotes);
       opt.classList.toggle('lead', count > 0 && count === max);
     });
     if (optionsChanged || questionChanged) fit();
@@ -120,14 +128,14 @@
     });
 
     const votesEl = $('votes');
-    votesEl.textContent = total.toLocaleString('tr-TR');
+    Motion.tweenNumber(votesEl, total, formatInt);
     if (lastTotal !== null && total > lastTotal) {
       votesEl.classList.remove('bump');
       void votesEl.offsetWidth;
       votesEl.classList.add('bump');
     }
     lastTotal = total;
-    $('participants').textContent = poll.participants.toLocaleString('tr-TR');
+    Motion.tweenNumber($('participants'), poll.participants, formatInt);
     votingTimer.set(poll.voting);
   }
 

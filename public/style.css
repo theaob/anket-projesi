@@ -56,7 +56,7 @@ button {
 button:active { transform: scale(0.96); }
 
 .bar-container { background: rgba(99, 102, 241, 0.08); border-radius: 50px; height: 12px; margin-bottom: 20px; }
-.bar { height: 100%; border-radius: 50px; background: linear-gradient(90deg, #6366f1, #ec4899); transition: width 1s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+.bar { width: 0; height: 100%; border-radius: 50px; background: linear-gradient(90deg, #6366f1, #ec4899); transition: width .7s cubic-bezier(.2, .8, .2, 1); }
 .label-row { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px; }
 
 /* Floating emoji burst (voting + results screens) */
@@ -90,4 +90,10 @@ button:active { transform: scale(0.96); }
         transform: translate(-50%, -50%) translate(var(--dx), -220px) scale(0.9);
         opacity: 0;
     }
+}
+
+/* Honour the system "reduce motion" setting. */
+@media (prefers-reduced-motion: reduce) {
+    .container, .panel { animation: none; }
+    .bar, button { transition: none; }
 }

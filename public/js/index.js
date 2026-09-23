@@ -60,9 +60,15 @@
   // A CSS @keyframes animation and a JS-set inline transform can't share the
   // `transform` property peacefully (the animation wins every frame, silently
   // dropping the pointer-driven part) so both effects are computed together here.
-  const WAVE_PERIOD = 1800; // ms, one full bob-and-flip cycle
-  const WAVE_Y = 14;        // px, peak bob height
+  const WAVE_PERIOD = 1800; // ms, one full bob cycle
+  const WAVE_Y = 10;        // px, peak bob height
   const LETTER_STAGGER = 80; // ms between each letter's phase, makes the wave travel
+  // Every few seconds a flip sweeps across the letters, one after another;
+  // the rest of the time they stay upright and readable.
+  const FLIP_EVERY = 6000;   // ms between flip waves
+  const FLIP_DURATION = 700; // ms for one letter's full turn
+  const FLIP_STAGGER = 60;   // ms between letters
+  const easeInOut = (p) => (p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2);
   const PULL_RADIUS = 110, PULL_STRENGTH = 30;
 
   let centers = [];
@@ -98,7 +104,8 @@
       const t = (((now - delay) % WAVE_PERIOD) + WAVE_PERIOD) % WAVE_PERIOD / WAVE_PERIOD;
       const wave = Math.sin(t * Math.PI); // 0 at t=0, 1 at t=0.5, 0 at t=1
       const y = -WAVE_Y * wave;
-      const rotY = 180 * wave;
+      const flip = ((now % FLIP_EVERY) - i * FLIP_STAGGER) / FLIP_DURATION;
+      const rotY = flip > 0 && flip < 1 ? 360 * easeInOut(flip) : 0;
 
       let pullX = 0, pullY = 0, scale = 1;
       if (pointerActive) {
@@ -319,64 +326,81 @@
     liveEl.textContent = !open ? 'Oylama kapandı' : text ? `Canlı · ${text}` : 'Canlı';
     if (votingOpen && !open) {
       votingOpen = false;
-      poll.toggleAttribute('data-voted', true);
       renderOptions(lastVotes);
       announce('Oylama kapandı. Sonuçlar gösteriliyor.');
     }
   });
 
-  // Renders the option buttons. Fill bars always start at width:0% here; when
-  // results are revealed a follow-up frame bumps them to the real percentage
-  // so the CSS width transition actually has something to animate from.
-  function renderOptions(votes) {
-    lastVotes = votes;
-    const t = totalVotes(votes);
+  // Option buttons are built once per set of options; live updates then only
+  // change bar widths and numbers, so bars glide from their old value to the
+  // new one instead of being rebuilt (and restarting from 0%) on every vote.
+  let builtLabels = null;
+  let resultsShown = false;
+
+  function buildOptions() {
+    builtLabels = options.slice();
+    resultsShown = false;
     // Built with DOM APIs, never HTML strings: option labels are written by
     // whoever created the poll and must not be able to inject markup.
     optsEl.replaceChildren(...options.map((label, i) => {
-      const pct = t ? Math.round(((votes[i] || 0) / t) * 100) : 0;
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'poll-opt';
       btn.dataset.i = i;
-      btn.disabled = revealed();
       const fill = document.createElement('span');
       fill.className = 'fill';
-      fill.style.width = '0%';
-      fill.style.setProperty('--bardelay', (i * 0.12) + 's');
       const row = document.createElement('span');
       row.className = 'row2';
       const text = document.createElement('span');
       text.textContent = label;
       const pctEl = document.createElement('span');
       pctEl.className = 'pct';
-      pctEl.textContent = pct + '%';
+      Motion.setNumber(pctEl, 0, (v) => v + '%');
       row.append(text, pctEl);
       btn.append(fill, row);
-      // The bar and percentage are visual; give screen readers the result.
-      if (revealed()) btn.setAttribute('aria-label', `${label}: %${pct}, ${(votes[i] || 0).toLocaleString('tr-TR')} oy`);
+      btn.addEventListener('click', () => castVote(i));
       return btn;
     }));
-    foot.textContent = t.toLocaleString('tr-TR') + ' oy verildi';
+  }
 
-    if (!revealed()) {
-      optsEl.querySelectorAll('.poll-opt').forEach((btn) => {
-        btn.addEventListener('click', () => castVote(Number(btn.dataset.i), btn));
-      });
-      return;
+  function renderOptions(votes) {
+    lastVotes = votes;
+    if (!builtLabels || builtLabels.length !== options.length || builtLabels.some((l, i) => l !== options[i])) {
+      buildOptions();
     }
+    const t = totalVotes(votes);
+    const show = revealed();
+    // The first time results appear, bars grow from 0 one after another;
+    // after that they move straight to each new value.
+    const firstReveal = show && !resultsShown;
+    resultsShown = show;
+    poll.toggleAttribute('data-voted', show);
 
-    requestAnimationFrame(() => {
-      optsEl.querySelectorAll('.poll-opt').forEach((btn, i) => {
-        const pct = t ? Math.round(((votes[i] || 0) / t) * 100) : 0;
-        const fill = btn.querySelector('.fill');
-        if (fill) fill.style.width = pct + '%';
-      });
+    const buttons = optsEl.querySelectorAll('.poll-opt');
+    buttons.forEach((btn, i) => {
+      const count = votes[i] || 0;
+      const pct = t ? Math.round((count / t) * 100) : 0;
+      btn.disabled = show;
+      const fill = btn.querySelector('.fill');
+      fill.style.setProperty('--bardelay', firstReveal ? (i * 0.08) + 's' : '0s');
+      Motion.tweenNumber(btn.querySelector('.pct'), show ? pct : 0, (v) => v + '%');
+      // The bar and percentage are visual; give screen readers the result.
+      if (show) btn.setAttribute('aria-label', `${builtLabels[i]}: %${pct}, ${count.toLocaleString('tr-TR')} oy`);
+      else btn.removeAttribute('aria-label');
     });
+    Motion.tweenNumber(foot, t, (v) => v.toLocaleString('tr-TR') + ' oy verildi');
+
+    // On the first reveal the bars are still at 0% in this frame; set the
+    // widths in the next one so the CSS transition has a start to animate from.
+    const setWidths = () => buttons.forEach((btn, i) => {
+      btn.querySelector('.fill').style.width = (show && t ? Math.round(((votes[i] || 0) / t) * 100) : 0) + '%';
+    });
+    if (firstReveal) requestAnimationFrame(setWidths); else setWidths();
   }
 
   const EMOJIS = ['🎉', '✨', '🔥', '👍', '💜'];
   function burst() {
+    if (Motion.reduced) return; // the "vote recorded" announcement still happens
     const rect = document.querySelector('.card').getBoundingClientRect();
     const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
     const check = document.createElement('span');
@@ -423,7 +447,6 @@
   function castVote(index) {
     if (voted || !votingOpen || !currentCode) return;
     voted = true;
-    poll.setAttribute('data-voted', '');
     optsEl.querySelectorAll('.poll-opt').forEach((b) => { b.disabled = true; });
     socket.emit('castVote', { code: currentCode, index });
     burst();
@@ -442,15 +465,17 @@
     votingOpen = data.voting.open;
     error.textContent = '';
     questionEl.textContent = data.question;
-    poll.toggleAttribute('data-voted', revealed());
     renderOptions(data.votes || {});
     votingTimer.set(data.voting);
-    const justJoined = !poll.hasAttribute('data-active');
-    poll.setAttribute('data-active', '');
-    form.style.display = 'none';
-    // Keyboard and screen-reader users land on the question, not on a form
-    // that has just disappeared.
-    if (justJoined) questionEl.focus();
+    if (!poll.hasAttribute('data-active')) {
+      // Cross-fade from the code form to the poll. Keyboard and screen-reader
+      // users land on the question, not on a form that has just disappeared.
+      Motion.transition(() => {
+        poll.setAttribute('data-active', '');
+        form.style.display = 'none';
+        questionEl.focus();
+      });
+    }
     if (closedNow) announce('Oylama kapandı. Sonuçlar gösteriliyor.');
   });
 
@@ -461,8 +486,11 @@
   socket.on('pollError', (msg) => {
     // The poll may have been deleted while we were away; fall back to the form.
     currentCode = null;
-    poll.removeAttribute('data-active');
-    form.style.display = '';
+    builtLabels = null;
+    Motion.transition(() => {
+      poll.removeAttribute('data-active');
+      form.style.display = '';
+    });
     error.textContent = msg;
   });
 
