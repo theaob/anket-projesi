@@ -145,6 +145,7 @@
   }
 
   const socket = io();
+  let reactions = [];
 
   // Rejoin on every (re)connect; a new socket has no rooms.
   socket.on('connect', () => {
@@ -156,7 +157,29 @@
       $('join-url').textContent = res.joinUrl.replace(/^https?:\/\//, '');
       // Cache-busting query so a reconnect after a restart refetches it.
       $('qr').src = `/qr/${encodeURIComponent(code)}.svg?t=${Date.now()}`;
+      reactions = res.reactions || [];
       render(res.poll);
+    });
+  });
+
+  // Voters' reactions rise from the bottom of the screen, sized to the
+  // screen so they read from the back of the room. They stay over the
+  // results, never over the QR code, which must remain scannable.
+  socket.on('reactions', (counts) => {
+    if (!Array.isArray(counts)) return;
+    const unit = Math.min(innerWidth, innerHeight) / 100;
+    const area = document.querySelector('.main').getBoundingClientRect();
+    counts.forEach((count, i) => {
+      if (!reactions[i]) return;
+      for (let k = 0; k < Math.min(count, 10); k++) {
+        setTimeout(() => Motion.floatEmoji(reactions[i], {
+          x: area.left + area.width * (0.05 + Math.random() * 0.9),
+          y: innerHeight - 6 * unit,
+          size: (6 + Math.random() * 4) * unit,
+          rise: innerHeight * (0.45 + Math.random() * 0.3),
+          duration: 3200
+        }), Math.random() * 300);
+      }
     });
   });
   socket.on('disconnect', () => { $('conn').hidden = false; });

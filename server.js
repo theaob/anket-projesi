@@ -148,6 +148,10 @@ const POLL_CODE_RE = /^\d{4,5}$/;
 // so cap how fast a single client can create them.
 const createLimiter = createLimiter_({ burst: 20, perHour: 20 });
 const voterIdLimiter = createLimiter_({ burst: VOTER_ID_BURST, perHour: VOTER_ID_PER_HOUR });
+// Live reactions voters can send; clients refer to them by index. Each voter
+// may send a quick burst, then about one a second.
+const REACTIONS = ['👍', '❤️', '😂', '😮', '👏', '🤔'];
+const reactionLimiter = createLimiter_({ burst: 10, perHour: 3600 });
 
 // polls: Map<code: string, poll>
 // poll: { code, question, options: string[], votes: number[],
@@ -298,7 +302,8 @@ function voterView(poll, voterId) {
         votes: poll.votes,
         voted: !!visitor?.voted,
         choice: visitor?.choice ?? null,
-        voting: votingView(poll)
+        voting: votingView(poll),
+        reactions: REACTIONS
     };
 }
 
@@ -343,6 +348,29 @@ function flushUpdate(poll) {
     io.to(`manage:${poll.code}`).emit('managePoll', ownerView(poll));
     io.to(`watch:${poll.code}`).emit('watchPoll', publicView(poll));
     u.timer = setTimeout(() => flushUpdate(poll), UPDATE_INTERVAL_MS);
+}
+
+// Reactions are counted and sent to voters and presenter screens at most every
+// REACTION_INTERVAL_MS per poll, as counts per reaction, so a room full of
+// people tapping away costs one small message per interval.
+const REACTION_INTERVAL_MS = 300;
+
+function addReaction(poll, index) {
+    poll.reactions ??= { timer: null, counts: null };
+    poll.reactions.counts ??= REACTIONS.map(() => 0);
+    poll.reactions.counts[index]++;
+    if (!poll.reactions.timer) flushReactions(poll);
+}
+
+function flushReactions(poll) {
+    const r = poll.reactions;
+    if (!r.counts || polls.get(poll.code) !== poll) {
+        r.timer = null;
+        return;
+    }
+    io.to([`poll:${poll.code}`, `watch:${poll.code}`]).emit('reactions', r.counts);
+    r.counts = null;
+    r.timer = setTimeout(() => flushReactions(poll), REACTION_INTERVAL_MS);
 }
 
 // Everyone watching a poll: managers, presenter screens and voters.
@@ -533,6 +561,7 @@ io.on('connection', (socket) => {
         db.deletePoll(code);
         clearTimeout(poll.timer);
         clearTimeout(poll.update?.timer);
+        clearTimeout(poll.reactions?.timer);
         polls.delete(code);
         io.to(`poll:${code}`).emit('pollError', 'Bu anket silindi.');
         io.in(`poll:${code}`).socketsLeave(`poll:${code}`);
@@ -586,7 +615,11 @@ io.on('connection', (socket) => {
         const poll = typeof code === 'string' && POLL_CODE_RE.test(code) ? polls.get(code) : null;
         if (!poll) return reply(ack, { error: 'Geçersiz anket kodu.' });
         socket.join(`watch:${code}`);
-        reply(ack, { poll: publicView(poll), joinUrl: joinUrl(socketProtocol(socket), socket.handshake.headers.host, code) });
+        reply(ack, {
+            poll: publicView(poll),
+            joinUrl: joinUrl(socketProtocol(socket), socket.handshake.headers.host, code),
+            reactions: REACTIONS
+        });
     });
 
     // ── Voter events ───────────────────────────────────────────
@@ -635,6 +668,20 @@ io.on('connection', (socket) => {
         visitor.voted = true;
         visitor.choice = index;
         scheduleUpdate(poll, { votesChanged: true });
+    });
+
+    // A reaction from a voter in the poll. The reply says whether it was
+    // accepted, so the sender (who shows their own reaction straight away)
+    // knows whether it will come back in the next broadcast.
+    on('react', (payload, ack) => {
+        const code = payload?.code;
+        const index = payload?.reaction;
+        const poll = polls.get(code);
+        const ok = Boolean(poll) && socket.data.pollCode === code
+            && Number.isInteger(index) && index >= 0 && index < REACTIONS.length
+            && reactionLimiter.take(socket.data.voterId).ok;
+        if (ok) addReaction(poll, index);
+        reply(ack, { ok });
     });
 
     on('disconnect', () => {
