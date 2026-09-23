@@ -5,9 +5,9 @@
   let hidden = false;
   let lastTotal = null;
   let current = null;
-  const formatInt = (v) => v.toLocaleString('tr-TR');
+  const formatInt = (v) => v.toLocaleString('en-US');
   const formatPct = (v) => v + '%';
-  const formatVotes = (v) => v.toLocaleString('tr-TR') + ' oy';
+  const formatVotes = (v) => v.toLocaleString('en-US') + (v === 1 ? ' vote' : ' votes');
 
   function showMessage(text) {
     $('stage').hidden = true;
@@ -45,7 +45,7 @@
     if (options.length === 0) {
       const empty = document.createElement('p');
       empty.className = 'empty';
-      empty.textContent = 'Seçenekler henüz eklenmedi.';
+      empty.textContent = 'No options added yet.';
       optionsEl.appendChild(empty);
     }
   }
@@ -92,13 +92,13 @@
     const open = phase === 'open';
     const counting = (open && remainingMs !== null) || phase === 'scheduled';
     $('countdown').hidden = !counting;
-    $('countdown-label').textContent = phase === 'scheduled' ? `Başlangıç ${VotingTimer.formatDate(opensAt)}` : 'Kalan süre';
-    $('countdown-text').textContent = phase === 'scheduled' && startsInMs === 0 ? 'Başlıyor…' : text;
+    $('countdown-label').textContent = phase === 'scheduled' ? `Starts ${VotingTimer.formatDate(opensAt)}` : 'Time left';
+    $('countdown-text').textContent = phase === 'scheduled' && startsInMs === 0 ? 'Starting…' : text;
     $('countdown').classList.toggle('urgent', open && remainingMs !== null && remainingMs <= 10000);
     document.body.classList.toggle('voting-closed', phase === 'closed');
     document.body.classList.toggle('voting-scheduled', phase === 'scheduled');
-    $('join-title').textContent = { open: 'Katılmak için tarayın', scheduled: 'Oylama yakında başlıyor', closed: 'Oylama kapandı' }[phase];
-    $('live').textContent = { open: 'Canlı', scheduled: 'Başlamadı', closed: 'Oylama kapandı' }[phase];
+    $('join-title').textContent = { open: 'Scan to join', scheduled: 'Voting starts soon', closed: 'Voting closed' }[phase];
+    $('live').textContent = { open: 'Live', scheduled: 'Not started', closed: 'Voting closed' }[phase];
     if (lastPhase === 'open' && phase === 'closed' && hidden) toggleHidden();
     lastPhase = phase;
   });
@@ -108,7 +108,7 @@
       || current.options.some((o, i) => o !== poll.options[i]);
     const questionChanged = !current || current.question !== poll.question;
     current = poll;
-    document.title = `${poll.code} · Sunum Ekranı`;
+    document.title = `${poll.code} · Presenter View`;
     $('question').textContent = poll.question || 'Soru';
     $('code').textContent = poll.code;
     if (optionsChanged) buildOptions(poll.options);
@@ -141,11 +141,13 @@
     }
     lastTotal = total;
     Motion.tweenNumber($('participants'), poll.participants, formatInt);
+    $('votes-label').textContent = total === 1 ? 'vote' : 'votes';
+    $('participants-label').textContent = poll.participants === 1 ? 'participant connected' : 'participants connected';
     votingTimer.set(poll.voting);
   }
 
   if (!/^\d{4,5}$/.test(code)) {
-    showMessage('Sunum ekranı için anket kodu gerekli: /present?code=1234');
+    showMessage('The presenter view needs a poll code: /present?code=1234');
     return;
   }
 
@@ -189,13 +191,13 @@
   });
   socket.on('disconnect', () => { $('conn').hidden = false; });
   socket.on('watchPoll', render);
-  socket.on('pollDeleted', () => showMessage('Bu anket silindi.'));
+  socket.on('pollDeleted', () => showMessage('This poll has been deleted.'));
 
   // ── Controls ─────────────────────────────────────────────
   function toggleHidden() {
     hidden = !hidden;
     document.body.classList.toggle('hidden-results', hidden);
-    $('btn-hide').firstChild.textContent = hidden ? 'Sonuçları göster' : 'Sonuçları gizle';
+    $('btn-hide').firstChild.textContent = hidden ? 'Show results' : 'Hide results';
     fit();
   }
 
@@ -204,7 +206,7 @@
     else document.documentElement.requestFullscreen?.().catch(() => {});
   }
   document.addEventListener('fullscreenchange', () => {
-    $('btn-full').firstChild.textContent = document.fullscreenElement ? 'Tam ekrandan çık' : 'Tam ekran';
+    $('btn-full').firstChild.textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen';
   });
 
   $('btn-hide').addEventListener('click', toggleHidden);

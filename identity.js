@@ -50,7 +50,7 @@ async function verifyTurnstile(secretKey, token, remoteIp) {
         const data = await res.json();
         return data.success === true;
     } catch (err) {
-        console.error('Turnstile doğrulaması yapılamadı:', err.message);
+        console.error('Turnstile verification failed:', err.message);
         return false;
     }
 }

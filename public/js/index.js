@@ -29,7 +29,7 @@
   const titleEl = document.getElementById('title');
   const letters = [];
   let li = 0;
-  ['Ankete', 'Katıl'].forEach((word) => {
+  ['Join', 'a', 'Poll'].forEach((word) => {
     const wordEl = document.createElement('span');
     wordEl.className = 'word';
     word.split('').forEach((ch) => {
@@ -256,11 +256,11 @@
           token = await turnstileToken(data.siteKey);
           continue;
         } catch (e) {
-          data.error = 'Güvenlik doğrulaması yüklenemedi, tekrar deneniyor…';
+          data.error = 'Could not load the security check, retrying…';
         }
       }
       token = undefined; // a Turnstile token can only be used once
-      setIdentityMessage(data.error || 'Sunucuya ulaşılamadı, tekrar deneniyor…');
+      setIdentityMessage(data.error || 'Could not reach the server, retrying…');
       await sleep(res && res.status === 429 ? (data.retryAfterSec || 10) * 1000 : Math.min(30000, 2000 * attempt));
     }
   }
@@ -277,7 +277,7 @@
   function syncIdentity() {
     if (!haveIdentity || socketIsVoter !== false) return;
     if (reconnectedForIdentity) {
-      error.textContent = 'Oy vermek için bu sitede çerezlere izin verin.';
+      error.textContent = 'Allow cookies for this site to vote.';
       return;
     }
     reconnectedForIdentity = true;
@@ -326,15 +326,15 @@
     poll.dataset.phase = now;
     liveEl.classList.toggle('closed', now !== 'open');
     liveEl.classList.toggle('urgent', now === 'open' && remainingMs !== null && remainingMs <= 10000);
-    if (now === 'closed') liveEl.textContent = 'Oylama kapandı';
+    if (now === 'closed') liveEl.textContent = 'Voting closed';
     else if (now === 'scheduled') {
-      liveEl.textContent = startsInMs > 0 ? `Başlangıç ${VotingTimer.formatDate(opensAt)} · ${text}` : 'Oylama başlıyor…';
-    } else if (!text) liveEl.textContent = 'Canlı';
-    else liveEl.textContent = remainingMs > 3600000 ? `Canlı · bitiş ${VotingTimer.formatDate(closesAt)}` : `Canlı · ${text}`;
+      liveEl.textContent = startsInMs > 0 ? `Starts ${VotingTimer.formatDate(opensAt)} · ${text}` : 'Voting is starting…';
+    } else if (!text) liveEl.textContent = 'Live';
+    else liveEl.textContent = remainingMs > 3600000 ? `Live · ends ${VotingTimer.formatDate(closesAt)}` : `Live · ${text}`;
     if (phase === 'open' && now === 'closed') {
       phase = 'closed';
       renderOptions(lastVotes);
-      announce('Oylama kapandı. Sonuçlar gösteriliyor.');
+      announce('Voting has closed. Showing the results.');
     }
   });
 
@@ -392,10 +392,10 @@
       fill.style.setProperty('--bardelay', firstReveal ? (i * 0.08) + 's' : '0s');
       Motion.tweenNumber(btn.querySelector('.pct'), show ? pct : 0, (v) => v + '%');
       // The bar and percentage are visual; give screen readers the result.
-      if (show) btn.setAttribute('aria-label', `${builtLabels[i]}: %${pct}, ${count.toLocaleString('tr-TR')} oy`);
+      if (show) btn.setAttribute('aria-label', `${builtLabels[i]}: ${pct}%, ${count.toLocaleString('en-US')} ${count === 1 ? 'vote' : 'votes'}`);
       else btn.removeAttribute('aria-label');
     });
-    Motion.tweenNumber(foot, t, (v) => v.toLocaleString('tr-TR') + ' oy verildi');
+    Motion.tweenNumber(foot, t, (v) => v.toLocaleString('en-US') + (v === 1 ? ' vote' : ' votes'));
 
     // On the first reveal the bars are still at 0% in this frame; set the
     // widths in the next one so the CSS transition has a start to animate from.
@@ -457,14 +457,14 @@
     optsEl.querySelectorAll('.poll-opt').forEach((b) => { b.disabled = true; });
     socket.emit('castVote', { code: currentCode, index });
     burst();
-    announce('Oyunuz kaydedildi. Sonuçlar gösteriliyor.');
+    announce('Your vote was recorded. Showing the results.');
   }
 
   // ── Live reactions ────────────────────────────────────────
   // Once results are showing, voters can send emoji reactions. Everyone's
   // reactions float up here and on the presenter screen. The server sends
   // them in batches, as a count per reaction.
-  const REACTION_NAMES = { '👍': 'Beğendim', '❤️': 'Bayıldım', '😂': 'Komik', '😮': 'Şaşırdım', '👏': 'Alkış', '🤔': 'Düşündürücü' };
+  const REACTION_NAMES = { '👍': 'Like', '❤️': 'Love', '😂': 'Funny', '😮': 'Wow', '👏': 'Applause', '🤔': 'Thinking' };
   const reactionRow = document.getElementById('reaction-row');
   let reactions = [];
   // Our own reactions float up as soon as they're tapped. Until the server's
@@ -542,8 +542,8 @@
         questionEl.focus();
       });
     }
-    if (closedNow) announce('Oylama kapandı. Sonuçlar gösteriliyor.');
-    if (openedNow) announce('Oylama başladı.');
+    if (closedNow) announce('Voting has closed. Showing the results.');
+    if (openedNow) announce('Voting has started.');
   });
 
   socket.on('updateVotes', (votes) => {
@@ -573,7 +573,7 @@
 
   function attemptJoin(code) {
     if (!/^\d{4,5}$/.test(code)) {
-      error.textContent = 'Anket kodunu gir lütfen.';
+      error.textContent = 'Please enter the poll code.';
       input.focus();
       return;
     }
@@ -645,7 +645,7 @@
       if (file.size > 1024 * 1024) throw new Error('too big');
       template = JSON.parse(await file.text());
     } catch (e) {
-      createError.textContent = 'Bu dosya okunamadı; bir JSON anket dosyası seçin.';
+      createError.textContent = 'Could not read this file; choose a JSON poll file.';
       return;
     }
     socket.emit('createPoll', { template }, (res) => {

@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Anket Raporu</title>
+<title>Poll Report</title>
 <script src="/socket.io/socket.io.js"></script>
 <style>
   * { box-sizing: border-box; }
@@ -73,35 +73,35 @@
 </head>
 <body>
 <nav class="toolbar" id="toolbar" hidden>
-  <a id="back" href="/">← Anketi yönet</a>
-  <button type="button" id="btn-print">PDF olarak kaydet / Yazdır</button>
+  <a id="back" href="/">← Manage poll</a>
+  <button type="button" id="btn-print">Save as PDF / Print</button>
 </nav>
-<p class="message" id="message" role="status">Rapor hazırlanıyor…</p>
+<p class="message" id="message" role="status">Preparing the report…</p>
 
 <main class="page" id="page" hidden>
-  <p class="eyebrow">Anket raporu</p>
+  <p class="eyebrow">Poll report</p>
   <h1 id="question"></h1>
   <p class="meta" id="meta"></p>
 
   <div class="tiles" id="tiles"></div>
 
   <section>
-    <h2>Sonuçlar <small id="total"></small></h2>
+    <h2>Results <small id="total"></small></h2>
     <div class="bars" id="bars" aria-hidden="true"></div>
-    <p class="empty" id="no-options" hidden>Bu ankette henüz seçenek yok.</p>
+    <p class="empty" id="no-options" hidden>This poll has no options yet.</p>
   </section>
 
   <section id="timeline-section">
-    <h2>Zamana göre oylar <small id="bucket"></small></h2>
+    <h2>Votes over time <small id="bucket"></small></h2>
     <div id="timeline"></div>
   </section>
 
   <section>
-    <h2>Sonuç tablosu</h2>
+    <h2>Results table</h2>
     <table>
-      <thead><tr><th>Seçenek</th><th class="num">Oy</th><th class="num">Yüzde</th></tr></thead>
+      <thead><tr><th>Option</th><th class="num">Votes</th><th class="num">Share</th></tr></thead>
       <tbody id="table"></tbody>
-      <tfoot><tr><td>Toplam</td><td class="num" id="table-total"></td><td class="num" id="table-total-pct"></td></tr></tfoot>
+      <tfoot><tr><td>Total</td><td class="num" id="table-total"></td><td class="num" id="table-total-pct"></td></tr></tfoot>
     </table>
   </section>
 

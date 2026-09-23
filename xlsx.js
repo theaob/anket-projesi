@@ -39,7 +39,7 @@ function colName(index) {
     return name;
 }
 
-// An absolute reference like 'Sonuçlar'!$A$2:$A$5.
+// An absolute reference like 'Results'!$A$2:$A$5.
 function rangeRef(sheetName, { col, from, to }) {
     const c = colName(col);
     return `'${sheetName.replace(/'/g, "''")}'!$${c}$${from + 1}:$${c}$${to + 1}`;
@@ -92,10 +92,10 @@ function chartXml(sheet, chart) {
     const grayLine = '<c:spPr><a:ln w="9525"><a:solidFill><a:srgbClr val="D9D9D9"/></a:solidFill></a:ln></c:spPr>';
     return XML_HEAD + `<c:chartSpace xmlns:c="${NS_CHART}" xmlns:a="${NS_A}" xmlns:r="${NS_REL}">`
         + '<c:roundedCorners val="0"/><c:chart>'
-        + `<c:title><c:tx><c:rich><a:bodyPr/><a:p><a:pPr><a:defRPr sz="1200" b="1"/></a:pPr><a:r><a:rPr lang="tr-TR" sz="1200" b="1"/><a:t>${esc(chart.title)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>`
+        + `<c:title><c:tx><c:rich><a:bodyPr/><a:p><a:pPr><a:defRPr sz="1200" b="1"/></a:pPr><a:r><a:rPr lang="en-US" sz="1200" b="1"/><a:t>${esc(chart.title)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>`
         + '<c:autoTitleDeleted val="0"/><c:plotArea><c:layout/>'
         + `<c:barChart><c:barDir val="${horizontal ? 'bar' : 'col'}"/><c:grouping val="clustered"/><c:varyColors val="0"/>`
-        + `<c:ser><c:idx val="0"/><c:order val="0"/><c:tx><c:v>${esc(chart.series || 'Oy')}</c:v></c:tx>`
+        + `<c:ser><c:idx val="0"/><c:order val="0"/><c:tx><c:v>${esc(chart.series || 'Votes')}</c:v></c:tx>`
         + `<c:spPr><a:solidFill><a:srgbClr val="${CHART_COLOR}"/></a:solidFill></c:spPr><c:invertIfNegative val="0"/>`
         // Value at the tip of each bar (the chart's only series needs no legend).
         + (chart.labels

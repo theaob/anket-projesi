@@ -3,25 +3,25 @@
 // countdowns run against this page's own clock from the remaining time, so a
 // device whose clock is wrong still counts down correctly.
 (() => {
-  // 0:42 · 12:05 · 1:02:09 · 3 g 4 sa
+  // 0:42 · 12:05 · 1:02:09 · 3d 4h
   function format(ms) {
     const s = Math.max(0, Math.ceil(ms / 1000));
     const days = Math.floor(s / 86400);
     const h = Math.floor((s % 86400) / 3600);
     const m = Math.floor((s % 3600) / 60);
     const sec = String(s % 60).padStart(2, '0');
-    if (days > 0) return h ? `${days} g ${h} sa` : `${days} g`;
+    if (days > 0) return h ? `${days}d ${h}h` : `${days}d`;
     if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${sec}`;
     return `${m}:${sec}`;
   }
 
-  // "24 Eyl 14:00", or just "14:00" for today.
+  // "Sep 24, 2:00 PM", or just "2:00 PM" for today.
   function formatDate(ms) {
     const d = new Date(ms);
     const today = d.toDateString() === new Date().toDateString();
-    return d.toLocaleString('tr-TR', today
-      ? { hour: '2-digit', minute: '2-digit' }
-      : { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleString('en-US', today
+      ? { hour: 'numeric', minute: '2-digit' }
+      : { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
   }
 
   // onChange({ phase, open, remainingMs, startsInMs, text, opensAt, closesAt })

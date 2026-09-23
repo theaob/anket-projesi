@@ -29,14 +29,16 @@
         return p.votes.reduce((a, b) => a + b, 0);
     }
 
-    const formatInt = (v) => v.toLocaleString('tr-TR');
+    const formatInt = (v) => v.toLocaleString('en-US');
+    const formatVotes = (v) => formatInt(v) + (v === 1 ? ' vote' : ' votes');
+    const formatPct = (v) => v + '%';
 
     // Stats and results are built once and then updated in place, so numbers
     // count to their new value and bars glide instead of being redrawn.
     let statEls = null;
     function renderStats() {
         if (!statEls) {
-            statEls = [['👁 Ziyaret'], ['✔ Oy'], ['✗ Oy vermeden ayrılan']].map(([label]) => {
+            statEls = [['👁 Visits'], ['✔ Votes'], ['✗ Left without voting']].map(([label]) => {
                 const span = document.createElement('span');
                 const strong = document.createElement('strong');
                 span.append(label + ': ', strong);
@@ -59,7 +61,7 @@
             if (poll.options.length === 0) {
                 const p = document.createElement('p');
                 p.className = 'empty-state';
-                p.textContent = 'Henüz seçenek yok. Aşağıdan soru ve seçenekleri ekleyip yayınlayın.';
+                p.textContent = 'No options yet. Add a question and options below, then publish.';
                 results.replaceChildren(p);
                 resultRows = [];
                 return;
@@ -72,9 +74,9 @@
                 const value = document.createElement('span');
                 const count = document.createElement('span');
                 const pct = document.createElement('span');
-                Motion.setNumber(count, 0, formatInt);
-                Motion.setNumber(pct, 0, (v) => '%' + v);
-                value.append(count, ' oy · ', pct);
+                Motion.setNumber(count, 0, formatVotes);
+                Motion.setNumber(pct, 0, formatPct);
+                value.append(count, ' · ', pct);
                 row.append(name, value);
                 const bar = document.createElement('div');
                 bar.className = 'bar-container';
@@ -90,8 +92,8 @@
         const apply = () => resultRows.forEach((r, i) => {
             const count = poll.votes[i] || 0;
             const pct = total ? Math.round(count / total * 100) : 0;
-            Motion.tweenNumber(r.count, count, formatInt);
-            Motion.tweenNumber(r.pct, pct, (v) => '%' + v);
+            Motion.tweenNumber(r.count, count, formatVotes);
+            Motion.tweenNumber(r.pct, pct, formatPct);
             r.fill.style.width = pct + '%';
         });
         if (changed) requestAnimationFrame(apply); else apply();
@@ -102,15 +104,15 @@
         row.className = 'option-row';
         const input = document.createElement('input');
         input.type = 'text';
-        input.placeholder = 'Seçenek...';
-        input.setAttribute('aria-label', 'Seçenek');
+        input.placeholder = 'Option...';
+        input.setAttribute('aria-label', 'Option');
         input.maxLength = 200;
         input.value = text;
         const remove = document.createElement('button');
         remove.type = 'button';
         remove.className = 'btn-remove';
         remove.textContent = '✕';
-        remove.setAttribute('aria-label', 'Seçeneği kaldır');
+        remove.setAttribute('aria-label', 'Remove option');
         remove.addEventListener('click', () => row.remove());
         row.append(input, remove);
         $('options-list').appendChild(row);
@@ -131,14 +133,14 @@
         const status = $('voting-status');
         status.classList.toggle('closed', state.phase !== 'open');
         status.classList.toggle('urgent', timed && state.remainingMs <= 10000);
-        const end = state.closesAt ? `, bitiş ${VotingTimer.formatDate(state.closesAt)}` : '';
-        if (state.phase === 'closed') status.textContent = 'Oylama kapalı';
+        const end = state.closesAt ? `, ends ${VotingTimer.formatDate(state.closesAt)}` : '';
+        if (state.phase === 'closed') status.textContent = 'Voting closed';
         else if (state.phase === 'scheduled') {
-            status.textContent = `Planlandı · ${VotingTimer.formatDate(state.opensAt)} başlangıç`
-                + (state.startsInMs > 0 ? ` (${state.text} sonra)` : '') + end;
-        } else status.textContent = timed ? `Oylama açık · ${state.text} kaldı${state.remainingMs > 3600000 ? end : ''}` : 'Oylama açık';
+            status.textContent = `Scheduled · starts ${VotingTimer.formatDate(state.opensAt)}`
+                + (state.startsInMs > 0 ? ` (in ${state.text})` : '') + end;
+        } else status.textContent = timed ? `Voting open · ${state.text} left${state.remainingMs > 3600000 ? end : ''}` : 'Voting open';
         const toggle = $('btn-voting');
-        toggle.textContent = { open: '■ Oylamayı kapat', scheduled: '▶ Şimdi başlat', closed: '▶ Oylamayı aç' }[state.phase];
+        toggle.textContent = { open: '■ Close voting', scheduled: '▶ Start now', closed: '▶ Open voting' }[state.phase];
         toggle.className = state.phase === 'open' ? 'btn-close' : 'btn-open';
         $('timer-running').hidden = !timed;
     });
@@ -180,15 +182,15 @@
         const opensAt = fromInputValue($('sched-start').value);
         const closesAt = fromInputValue($('sched-end').value);
         if (opensAt === undefined || closesAt === undefined) {
-            $('schedule-status').textContent = 'Tarih ve saati eksiksiz girin.';
+            $('schedule-status').textContent = 'Enter the full date and time.';
             return;
         }
         saveSchedule(opensAt, closesAt, (res) => {
             if (res.error) return;
             scheduleDirty = false;
             $('schedule-status').textContent = opensAt && opensAt > Date.now()
-                ? `Plan kaydedildi. Oylama kendiliğinden açılacak: ${VotingTimer.formatDate(opensAt)}.`
-                : 'Plan kaydedildi.';
+                ? `Schedule saved. Voting will open automatically: ${VotingTimer.formatDate(opensAt)}.`
+                : 'Schedule saved.';
         });
     });
 
@@ -205,7 +207,7 @@
         $('present-link').href = `/present?code=${p.code}`;
         $('report-link').href = `/report#${secret}`;
         $('manage-link').value = location.href;
-        document.title = `${p.code} · Anketi Yönet`;
+        document.title = `${p.code} · Manage Poll`;
         renderStats();
         renderResults();
         votingTimer.set(p.voting);
@@ -215,7 +217,7 @@
     }
 
     if (!secret) {
-        showError('Yönetim bağlantısı eksik. Ana sayfadan yeni bir anket oluşturabilirsiniz.');
+        showError('The manage link is incomplete. You can create a new poll from the home page.');
         return;
     }
 
@@ -239,7 +241,7 @@
 
     socket.on('pollDeleted', () => {
         forgetPoll();
-        showError('Bu anket silindi.');
+        showError('This poll has been deleted.');
     });
 
     $('btn-add').addEventListener('click', () => addOption());
@@ -268,16 +270,16 @@
         const optionsChanged = options.length !== poll.options.length
             || options.some((opt, i) => opt !== poll.options[i]);
         if (optionsChanged && totalVotes(poll) > 0
-            && !confirm('Seçenekler değişti; mevcut oylar sıfırlanacak. Devam edilsin mi?')) return;
+            && !confirm('The options have changed; the current votes will be reset. Continue?')) return;
         socket.emit('updatePoll', { code: poll.code, question, options });
     });
 
     $('btn-reset').addEventListener('click', () => {
-        if (poll && confirm('Oylar sıfırlanacak. Emin misiniz?')) socket.emit('resetVotes', poll.code);
+        if (poll && confirm('All votes will be reset. Are you sure?')) socket.emit('resetVotes', poll.code);
     });
 
     $('btn-delete').addEventListener('click', () => {
-        if (poll && confirm(`${poll.code} kodlu anket ve tüm sonuçları kalıcı olarak silinecek. Emin misiniz?`)) {
+        if (poll && confirm(`Poll ${poll.code} and all its results will be permanently deleted. Are you sure?`)) {
             socket.emit('deletePoll', poll.code);
         }
     });
@@ -300,17 +302,17 @@
         btn.addEventListener('click', () => {
             if (!poll) return;
             btn.disabled = true;
-            $('export-status').textContent = 'Hazırlanıyor…';
+            $('export-status').textContent = 'Preparing…';
             socket.timeout(15000).emit('exportPoll',
                 { code: poll.code, format: btn.dataset.export, tzOffset: new Date().getTimezoneOffset() },
                 (err, res) => {
                     btn.disabled = false;
                     if (err || res.error) {
-                        $('export-status').textContent = res?.error || 'Dışa aktarılamadı, lütfen tekrar deneyin.';
+                        $('export-status').textContent = res?.error || 'Export failed, please try again.';
                         return;
                     }
                     download(res.filename, res.mime, res.data);
-                    $('export-status').textContent = `${res.filename} indirildi.`;
+                    $('export-status').textContent = `Downloaded ${res.filename}.`;
                 });
         });
     });
@@ -328,7 +330,7 @@
         return question || options.length ? { question, options } : null;
     }
 
-    // Loads a file into the editor; nothing changes until "Yayınla".
+    // Loads a file into the editor; nothing changes until "Publish".
     $('btn-import').addEventListener('click', () => $('import-file').click());
     $('import-file').addEventListener('change', async () => {
         const file = $('import-file').files[0];
@@ -336,14 +338,14 @@
         if (!file) return;
         const template = file.size <= 1024 * 1024 ? readTemplate(await file.text()) : null;
         if (!template) {
-            $('import-status').textContent = 'Bu dosyada soru veya seçenek bulunamadı.';
+            $('import-status').textContent = 'No question or options found in this file.';
             return;
         }
         $('question').value = template.question;
         $('options-list').replaceChildren();
         template.options.forEach(opt => addOption(opt));
         if (template.options.length < 2) addOption();
-        $('import-status').textContent = `${file.name} yüklendi. Kaydetmek için "Yayınla"ya basın.`;
+        $('import-status').textContent = `Loaded ${file.name}. Press "Publish" to save it.`;
     });
 
     // A new poll with this one's question and options (and no votes), opened
@@ -370,7 +372,7 @@
                 document.execCommand('copy');
             }
             const old = btn.textContent;
-            btn.textContent = 'Kopyalandı';
+            btn.textContent = 'Copied';
             setTimeout(() => { btn.textContent = old; }, 1500);
         });
     });

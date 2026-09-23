@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Sunum Ekranı</title>
+<title>Presenter View</title>
 <script src="/socket.io/socket.io.js"></script>
 <style>
   * { box-sizing: border-box; }
@@ -56,7 +56,7 @@
   .hidden-results .opt { padding: calc(var(--size) * 0.45) calc(var(--size) * 0.7); border-radius: 18px; background: rgba(255,255,255,.7); }
   .empty { color: var(--muted); font-size: clamp(18px, 2vw, 32px); }
 
-  .footer { display: flex; gap: clamp(16px, 3vw, 40px); align-items: center; margin-top: clamp(14px, 3vh, 36px);
+  .footer { display: flex; flex-wrap: wrap; gap: 8px clamp(16px, 3vw, 40px); align-items: center; margin-top: clamp(14px, 3vh, 36px);
     font-size: clamp(14px, 1.3vw, 22px); font-weight: 600; color: var(--muted); }
   .footer strong { color: var(--ink); font-feature-settings: "tnum" 1; }
   .live { display: inline-flex; align-items: center; gap: 8px; color: var(--accent); text-transform: uppercase; letter-spacing: .08em; font-size: .8em; }
@@ -92,8 +92,11 @@
   .code { font-weight: 900; font-size: clamp(40px, 5vw, 92px); letter-spacing: .12em; line-height: 1; font-feature-settings: "tnum" 1;
     background: var(--brand); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
-  /* ── Controls (fade out when the mouse is idle) ── */
-  .controls { position: fixed; top: 16px; right: 16px; z-index: 5; display: flex; gap: 8px; transition: opacity .4s ease; }
+  /* ── Controls (fade out when the mouse is idle) ──
+     In the results footer rather than a screen corner, where they covered
+     the join card on 16:9 screens. They keep their space while hidden, so
+     nothing moves when they fade in or out. */
+  .controls { margin-left: auto; display: flex; gap: 8px; transition: opacity .4s ease; }
   body.idle .controls { opacity: 0; pointer-events: none; }
   body.idle { cursor: none; }
   .controls button {
@@ -128,11 +131,6 @@
 <div class="blob blob-a" aria-hidden="true"></div>
 <div class="blob blob-b" aria-hidden="true"></div>
 
-<div class="controls" id="controls">
-  <button type="button" id="btn-hide">Sonuçları gizle<kbd>H</kbd></button>
-  <button type="button" id="btn-full">Tam ekran<kbd>F</kbd></button>
-</div>
-
 <div class="message" id="message" hidden></div>
 
 <main class="stage" id="stage" hidden>
@@ -140,24 +138,28 @@
     <h1 class="question" id="question"></h1>
     <div class="options" id="options"></div>
     <div class="footer">
-      <span class="live" id="live">Canlı</span>
-      <span><strong id="votes">0</strong> oy</span>
-      <span><strong id="participants">0</strong> katılımcı bağlı</span>
-      <span class="hidden-note">Sonuçlar gizli</span>
+      <span class="live" id="live">Live</span>
+      <span><strong id="votes">0</strong> <span id="votes-label">votes</span></span>
+      <span><strong id="participants">0</strong> <span id="participants-label">participants connected</span></span>
+      <span class="hidden-note">Results hidden</span>
+      <div class="controls" id="controls">
+        <button type="button" id="btn-hide">Hide results<kbd>H</kbd></button>
+        <button type="button" id="btn-full">Full screen<kbd>F</kbd></button>
+      </div>
     </div>
   </section>
 
   <aside class="join">
-    <div class="countdown" id="countdown" role="timer" hidden><small id="countdown-label">Kalan süre</small><span id="countdown-text"></span></div>
-    <h2 id="join-title">Katılmak için tarayın</h2>
-    <img class="qr" id="qr" alt="Ankete katılım QR kodu" />
+    <div class="countdown" id="countdown" role="timer" hidden><small id="countdown-label">Time left</small><span id="countdown-text"></span></div>
+    <h2 id="join-title">Scan to join</h2>
+    <img class="qr" id="qr" alt="QR code to join the poll" />
     <p class="url" id="join-url"></p>
-    <p class="or">veya kodu girin</p>
+    <p class="or">or enter the code</p>
     <div class="code" id="code"></div>
   </aside>
 </main>
 
-<p class="conn" id="conn" role="status" hidden>Bağlantı koptu, yeniden bağlanılıyor…</p>
+<p class="conn" id="conn" role="status" hidden>Connection lost, reconnecting…</p>
 
 <script src="/js/motion.js"></script>
 <script src="/js/voting-timer.js"></script>

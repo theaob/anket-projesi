@@ -74,7 +74,7 @@ let warnedAboutProxy = false;
 app.use((req, res, next) => {
     if (!TRUST_PROXY && !warnedAboutProxy && req.headers['x-forwarded-for']) {
         warnedAboutProxy = true;
-        console.warn('⚠️  X-Forwarded-For başlığı alındı ama TRUST_PROXY ayarlı değil; tüm istemciler vekil sunucunun adresinden geliyor sayılacak. README\'deki "İnternette yayınlama" bölümüne bakın.');
+        console.warn('⚠️  Received an X-Forwarded-For header but TRUST_PROXY is not set, so every client will appear to come from the proxy\'s address. See "Serving on the internet" in the README.');
     }
     next();
 });
@@ -91,14 +91,14 @@ app.post('/api/voter', express.json({ limit: '4kb' }), async (req, res) => {
             const token = req.body?.turnstileToken;
             if (!token) return res.status(401).json({ challenge: 'turnstile', siteKey: TURNSTILE_SITE_KEY });
             if (!(await verifyTurnstile(TURNSTILE_SECRET_KEY, token, ip))) {
-                return res.status(403).json({ error: 'Doğrulama başarısız oldu, lütfen tekrar deneyin.' });
+                return res.status(403).json({ error: 'Verification failed, please try again.' });
             }
         }
         const limit = voterIdLimiter.take(clientKey(ip));
         if (!limit.ok) {
             res.set('Retry-After', String(limit.retryAfterSec));
             return res.status(429).json({
-                error: 'Bu ağdan çok fazla yeni katılımcı geldi. Lütfen biraz sonra tekrar deneyin.',
+                error: 'Too many new participants from this network. Please try again in a little while.',
                 retryAfterSec: limit.retryAfterSec
             });
         }
@@ -106,8 +106,8 @@ app.post('/api/voter', express.json({ limit: '4kb' }), async (req, res) => {
         res.set('Set-Cookie', identity.cookieHeader(cookieValue, req.secure));
         res.json({ ok: true });
     } catch (err) {
-        console.error('Katılımcı kimliği oluşturulamadı:', err);
-        res.status(500).json({ error: 'Sunucu hatası, lütfen tekrar deneyin.' });
+        console.error('Could not create a participant identity:', err);
+        res.status(500).json({ error: 'Server error, please try again.' });
     }
 });
 
@@ -185,7 +185,7 @@ function loadPolls() {
         if (!poll.closed && votingPhase(poll) === 'closed') closeVoting(poll);
         else scheduleVoting(poll);
     }
-    console.log(`📂 ${polls.size} anket yüklendi (${path.join(DATA_DIR, 'anket.db')})`);
+    console.log(`📂 ${polls.size} polls loaded (${path.join(DATA_DIR, 'anket.db')})`);
 }
 
 function shutdown() {
@@ -200,12 +200,12 @@ process.on('SIGTERM', shutdown);
 // so log, close the database cleanly and exit for the process manager
 // (Docker --restart) to restart. All data is already in the database.
 process.on('uncaughtException', (err) => {
-    console.error('Beklenmeyen hata, sunucu kapanıyor:', err);
+    console.error('Unexpected error, shutting down:', err);
     try { db.close(); } catch (e) { /* already closed */ }
     process.exit(1);
 });
 process.on('unhandledRejection', (err) => {
-    console.error('Yakalanmamış Promise hatası:', err);
+    console.error('Unhandled promise rejection:', err);
 });
 
 // ── Poll helpers ───────────────────────────────────────────────
@@ -274,7 +274,7 @@ function scheduleVoting(poll) {
             else scheduleVoting(poll);
             notifyAll(poll);
         } catch (err) {
-            console.error('Oylama zamanlayıcısı çalışamadı:', err);
+            console.error('Voting timer failed:', err);
         }
     }, Math.min(MAX_TIMER_STEP_MS, Math.max(0, next - Date.now())));
 }
@@ -419,7 +419,7 @@ function sendInitToRoom(poll) {
         .then(sockets => {
             for (const s of sockets) s.emit('init', voterView(poll, s.data.voterId));
         })
-        .catch(err => console.error('Anket güncellemesi gönderilemedi:', err));
+        .catch(err => console.error('Could not send a poll update:', err));
 }
 
 function resetRound(poll) {
@@ -442,7 +442,7 @@ function pollTemplate(value) {
     if (!source || typeof source !== 'object' || !Array.isArray(source.options)) return null;
     const options = source.options.slice(0, MAX_OPTIONS * 5).map(cleanText).filter(Boolean).slice(0, MAX_OPTIONS);
     const question = cleanText(source.question);
-    return question || options.length ? { question: question || 'Yeni Anket', options } : null;
+    return question || options.length ? { question: question || 'New poll', options } : null;
 }
 
 function sameOptions(a, b) {
@@ -485,7 +485,7 @@ const getLocalIp = () => {
 const localIp = getLocalIp();
 const PORT = envInt('PORT', 3000);
 // Base address put in join links and QR codes. Set PUBLIC_URL when the
-// server is reached through a proxy or a DNS name (e.g. http://anket.firma.local).
+// server is reached through a proxy or a DNS name (e.g. http://polls.example.local).
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
 
 // The join link for a poll, as seen from the browser that asked. A presenter
@@ -527,8 +527,8 @@ io.on('connection', (socket) => {
         try {
             handler(...args);
         } catch (err) {
-            console.error(`"${event}" işlenirken hata:`, err);
-            reply(args[args.length - 1], { error: 'Sunucu hatası, lütfen tekrar deneyin.' });
+            console.error(`"${event}" failed:`, err);
+            reply(args[args.length - 1], { error: 'Server error, please try again.' });
         }
     });
     const ownedPoll = (code) => (socket.data.owned.has(code) ? polls.get(code) : null);
@@ -542,15 +542,15 @@ io.on('connection', (socket) => {
         let template = null;
         if (payload?.template !== undefined) {
             template = pollTemplate(payload.template);
-            if (!template) return reply(ack, { error: 'Dosyada soru veya seçenek bulunamadı.' });
+            if (!template) return reply(ack, { error: 'No question or options found in the file.' });
         }
         if (!createLimiter.take(clientKey(socket.data.ip)).ok) {
-            return reply(ack, { error: 'Çok fazla anket oluşturuldu, lütfen daha sonra tekrar deneyin.' });
+            return reply(ack, { error: 'Too many polls created, please try again later.' });
         }
         const code = generateCode();
-        if (!code) return reply(ack, { error: 'Şu anda boş anket kodu yok, lütfen daha sonra tekrar deneyin.' });
+        if (!code) return reply(ack, { error: 'No free poll codes right now, please try again later.' });
         const secret = crypto.randomBytes(24).toString('base64url');
-        const question = template?.question ?? 'Yeni Anket';
+        const question = template?.question ?? 'New poll';
         const options = template?.options ?? [];
         db.createPoll(code, question, hashSecret(secret));
         if (options.length) db.updatePoll(code, question, options);
@@ -567,7 +567,7 @@ io.on('connection', (socket) => {
             ? db.findCodeByManageHash(hashSecret(secret))
             : null;
         const poll = code && polls.get(code);
-        if (!poll) return reply(ack, { error: 'Anket bulunamadı. Bağlantı hatalı olabilir ya da anket silinmiş olabilir.' });
+        if (!poll) return reply(ack, { error: 'Poll not found. The link may be wrong, or the poll may have been deleted.' });
         socket.data.owned.add(code);
         socket.join(`manage:${code}`);
         reply(ack, { poll: ownerView(poll) });
@@ -599,7 +599,7 @@ io.on('connection', (socket) => {
         clearTimeout(poll.update?.timer);
         clearTimeout(poll.reactions?.timer);
         polls.delete(code);
-        io.to(`poll:${code}`).emit('pollError', 'Bu anket silindi.');
+        io.to(`poll:${code}`).emit('pollError', 'This poll has been deleted.');
         io.in(`poll:${code}`).socketsLeave(`poll:${code}`);
         io.to(`manage:${code}`).emit('pollDeleted', code);
         io.in(`manage:${code}`).socketsLeave(`manage:${code}`);
@@ -643,15 +643,15 @@ io.on('connection', (socket) => {
     // now; no end keeps it open until closed by hand.
     on('setSchedule', (payload, ack) => {
         const poll = ownedPoll(payload?.code);
-        if (!poll) return reply(ack, { error: 'Anket bulunamadı.' });
+        if (!poll) return reply(ack, { error: 'Poll not found.' });
         const now = Date.now();
         const valid = (t) => t === null || t === undefined || (Number.isSafeInteger(t) && t <= now + MAX_SCHEDULE_MS);
-        if (!valid(payload.opensAt) || !valid(payload.closesAt)) return reply(ack, { error: 'Geçersiz tarih.' });
+        if (!valid(payload.opensAt) || !valid(payload.closesAt)) return reply(ack, { error: 'Invalid date.' });
         const opensAt = payload.opensAt > now ? payload.opensAt : null;
         const closesAt = payload.closesAt ?? null;
-        if (opensAt === null && closesAt === null) return reply(ack, { error: 'Başlangıç veya bitiş zamanı seçin.' });
+        if (opensAt === null && closesAt === null) return reply(ack, { error: 'Choose a start or end time.' });
         if (closesAt !== null && closesAt < (opensAt ?? now) + MIN_TIMER_SEC * 1000) {
-            return reply(ack, { error: opensAt ? 'Bitiş, başlangıçtan sonra olmalı.' : 'Bitiş zamanı gelecekte olmalı.' });
+            return reply(ack, { error: opensAt ? 'The end must be after the start.' : 'The end time must be in the future.' });
         }
         setVoting(poll, { closed: false, opensAt, closesAt });
         notifyAll(poll);
@@ -665,7 +665,7 @@ io.on('connection', (socket) => {
     on('exportPoll', (payload, ack) => {
         const poll = ownedPoll(payload?.code);
         const format = Object.hasOwn(exporter.FORMATS, payload?.format) ? exporter.FORMATS[payload.format] : null;
-        if (!poll || !format) return reply(ack, { error: 'Anket bulunamadı.' });
+        if (!poll || !format) return reply(ack, { error: 'Poll not found.' });
         const tz = Number.isInteger(payload.tzOffset) && Math.abs(payload.tzOffset) <= 14 * 60 ? payload.tzOffset : 0;
         const { phase, opensAt, closesAt } = votingView(poll);
         const report = exporter.buildReport(poll, db.exportDetails(poll.code), {
@@ -680,7 +680,7 @@ io.on('connection', (socket) => {
     // Read-only and does not count as a visit.
     on('watchPoll', (code, ack) => {
         const poll = typeof code === 'string' && POLL_CODE_RE.test(code) ? polls.get(code) : null;
-        if (!poll) return reply(ack, { error: 'Geçersiz anket kodu.' });
+        if (!poll) return reply(ack, { error: 'Invalid poll code.' });
         socket.join(`watch:${code}`);
         reply(ack, {
             poll: publicView(poll),
@@ -693,11 +693,11 @@ io.on('connection', (socket) => {
     on('joinPoll', (code) => {
         const poll = typeof code === 'string' && POLL_CODE_RE.test(code) ? polls.get(code) : null;
         if (!poll) {
-            socket.emit('pollError', 'Geçersiz anket kodu.');
+            socket.emit('pollError', 'Invalid poll code.');
             return;
         }
         if (!socket.data.voterId) {
-            socket.emit('pollError', 'Katılımcı doğrulanamadı. Lütfen sayfayı yenileyip tekrar deneyin.');
+            socket.emit('pollError', 'Could not verify you as a participant. Please reload the page and try again.');
             return;
         }
         if (socket.data.pollCode !== code) {
@@ -760,5 +760,5 @@ io.on('connection', (socket) => {
 loadPolls();
 
 server.listen(PORT, () => {
-    console.log(`🚀 Sunucu Hazır: ${PUBLIC_URL || `http://${localIp}:${PORT}`}`);
+    console.log(`🚀 Server ready: ${PUBLIC_URL || `http://${localIp}:${PORT}`}`);
 });

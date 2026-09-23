@@ -1,89 +1,92 @@
 # 📊 Anket Projesi
 
-Toplantı, ders ve etkinlikler için canlı anket uygulaması. Kapalı ağda (intranet) internet bağlantısı olmadan çalışır; HTTPS ters vekil arkasında internette de yayınlanabilir.
+A live polling app for meetings, classes and events. It runs on a closed network (intranet) with no internet connection, and can also be served on the internet behind an HTTPS reverse proxy.
 
 [![CI](https://github.com/theaob/anket-projesi/actions/workflows/ci.yml/badge.svg)](https://github.com/theaob/anket-projesi/actions/workflows/ci.yml)
 [![Build and Push to DockerHub](https://github.com/theaob/anket-projesi/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/theaob/anket-projesi/actions/workflows/docker-publish.yml)
 
-## ✨ Özellikler
+## ✨ Features
 
-* **💎 Modern Arayüz:** Animasyonlu, telefona uygun arayüz; klavye ve ekran okuyucuyla kullanılabilir (WCAG 2 AA renk kontrastı).
-* **📡 Canlı Sonuçlar:** Socket.io ile anlık grafik güncellemeleri.
-* **⏱ Oylamayı Aç/Kapat ve Zamanlayıcı:** Oylamayı elle açıp kapatın, süreli başlatın ya da başlangıç ve bitiş tarih/saatini önceden planlayın; oylama zamanı gelince kendiliğinden açılır, bitişte kapanır ve sonuçlar herkese gösterilir.
-* **🖥 Sunum Ekranı:** Projeksiyon için tam ekran canlı sonuçlar; katılım QR kodu ve anket kodu ekranda.
-* **👥 Herkes Kendi Anketini Oluşturur:** Hesap gerekmez. Ana sayfadan anket oluşturan kişiye gizli bir yönetim bağlantısı verilir; anketi yalnızca bu bağlantıya sahip olanlar düzenleyebilir, sıfırlayabilir veya silebilir.
-* **🚀 GitHub Otomasyonu:** Versiyon kontrolü ve otomatik GitHub Release yayını.
-* **📊 Dışa aktarma:** Excel (özet, grafikler, oy saatleri, zaman çizelgesi), yazdırılabilir PDF raporu, CSV ve JSON.
-* **📥 JSON içe aktarma ve kopyalama:** Dışa aktarılan JSON dosyasından (veya `{ "question": "...", "options": [...] }`) yeni anket oluşturma; bir anketin kopyasını oluşturma.
-* **🔒 Kapalı Ağ Uyumu:** Kapalı ağda internet bağlantısı gerekmez (isteğe bağlı Cloudflare Turnstile dışında hiçbir dış servis kullanılmaz).
-* **🌐 İnternette Yayın:** İmzalı katılımcı çerezleri, ağ başına hız sınırları ve isteğe bağlı bot doğrulamasıyla toplu oy kullanmaya karşı koruma.
-* **🐳 Docker Ready:** Tek komutla her ortamda tutarlı kurulum.
+* **💎 Modern interface:** Animated, mobile-friendly UI that works with a keyboard and screen readers (WCAG 2 AA colour contrast).
+* **📡 Live results:** Instant chart updates over Socket.IO.
+* **⏱ Open/close voting and timers:** Open and close voting by hand, start it with a countdown, or schedule a start and end date and time in advance. Voting opens and closes on its own, and the results are then shown to everyone.
+* **🖥 Presenter view:** Full-screen live results for a projector, with a QR code and the poll code to join.
+* **😀 Live reactions:** After voting, participants can send emoji reactions that float up on everyone's results and on the presenter view.
+* **👥 Everyone creates their own polls:** No accounts. Whoever creates a poll gets a secret manage link; only people with that link can edit, reset or delete the poll.
+* **📊 Exports:** Excel (summary, charts, vote times, timeline), a printable PDF report, CSV and JSON.
+* **📥 JSON import and duplicating:** Create a poll from an exported JSON file (or `{ "question": "...", "options": [...] }`), or duplicate an existing poll.
+* **🔒 Works offline:** No internet connection needed on a closed network (no external services are used, apart from the optional Cloudflare Turnstile).
+* **🌐 Ready for the internet:** Signed participant cookies, per-network rate limits and optional bot checks protect against vote stuffing.
+* **🚀 GitHub automation:** Versioning and automatic GitHub releases.
+* **🐳 Docker ready:** A consistent setup anywhere with a single command.
 
-## 🚀 Hızlı Başlangıç
+## 🚀 Quick start
 
-### Yerel Kurulum (Geliştirici Modu)
-1. Bağımlılıkları yükleyin: `npm install`
-2. Sunucuyu başlatın: `node server.js` (Node.js 22.13+)
-3. Tarayıcıda açın: `http://localhost:3000` (port `PORT` ortam değişkeniyle değiştirilebilir)
-4. Testleri ve lint'i çalıştırın: `npm test`, `npm run lint` (her push ve pull request'te GitHub Actions'ta da çalışır)
+### Local setup (development)
+1. Install dependencies: `npm install`
+2. Start the server: `node server.js` (Node.js 22.13+)
+3. Open `http://localhost:3000` in a browser (change the port with the `PORT` environment variable)
+4. Run the tests and linter: `npm test`, `npm run lint` (they also run in GitHub Actions on every push and pull request)
 
-### Sürüm Çıkarma
-1. `CHANGELOG.md` içindeki `## [Unreleased]` başlığını yeni sürümle değiştirin (örn. `## [2.0.1] - 2026-09-23`) ve commit edip `main`'e gönderin.
-2. `npm run release:patch` (veya `release:minor` / `release:major`) çalıştırın. Betik önce `main` dalında, temiz ve GitHub ile eşit olduğunuzu ve CHANGELOG'da yeni sürümün bölümü bulunduğunu kontrol eder; ardından sürümü artırır, etiketler ve gönderir. GitHub Actions Docker imajını ve sürüm notlarını yayınlar. Yalnızca kontrolleri çalıştırmak için: `npm run release:patch -- --dry-run`.
+### Releasing
+1. In `CHANGELOG.md`, rename the `## [Unreleased]` heading to the new version (e.g. `## [2.1.1] - 2026-09-23`), commit and push to `main`.
+2. Run `npm run release:patch` (or `release:minor` / `release:major`). The script first checks that you are on `main`, that the working tree is clean and in sync with GitHub, and that the CHANGELOG has a section for the new version; then it bumps the version, tags it and pushes. GitHub Actions publishes the Docker image and the release notes. To only run the checks: `npm run release:patch -- --dry-run`.
 
-## 🗳 Kullanım
-1. Ana sayfada **"Yeni anket oluştur"** düğmesine basın. Anketin yönetim sayfasına (`/manage#<gizli-anahtar>`) yönlendirilirsiniz.
-2. Soruyu ve seçenekleri girip **Yayınla**'ya basın.
-3. Katılımcılarla anket kodunu ya da katılım bağlantısını (`/?code=1234`) paylaşın. Kodlar 4 hanelidir; 4 haneli kodlar neredeyse tükendiğinde yeni anketlere 5 haneli kod verilir.
-4. Yönetim sayfasında sonuçları canlı izleyin; oyları sıfırlayın, sonuçları Excel/PDF/CSV/JSON olarak dışa aktarın, anketi kopyalayın veya silin. Ana sayfadaki "JSON dosyasından içe aktar" ile kayıtlı bir anketten yeni anket oluşturabilirsiniz.
-5. **Oylama** bölümünden oylamayı kapatıp açabilir ya da süreli başlatabilirsiniz (30 sn, 1, 2 veya 5 dk; süre işlerken "+30 sn" ile uzatılabilir). Süre dolunca oylama otomatik kapanır, kapalı ankette oy verilemez ve sonuçlar tüm katılımcılara gösterilir. "Tarih ve saatle planla" ile başlangıç ve/veya bitiş zamanı seçebilirsiniz (en fazla bir yıl sonrası): başlangıçtan önce katılımcılar anketi ve başlamasına kalan süreyi görür ama oy veremez; bitiş boş bırakılırsa oylama siz kapatana kadar açık kalır. "Şimdi başlat" planı beklemeden açar, elle kapatmak planı kaldırır. Yeni anketler açık olarak başlar; zamanlayıcı ve plan sunucu yeniden başlatılsa da kaldığı yerden devam eder.
-6. Salondaki ekran için yönetim sayfasındaki **"Sunum ekranını aç"** bağlantısını kullanın (`/present?code=1234`).
+Merging a pull request that changes the version in `package.json` into `main` also tags and publishes that version automatically.
 
-### 🖥 Sunum Ekranı
-Soruyu, canlı sonuç çubuklarını, bağlı katılımcı sayısını ve katılım için bir QR kodu ile anket kodunu gösterir. Salt okunurdur ve ziyaret olarak sayılmaz; yönetim anahtarını içermediği için projeksiyonda güvenle gösterilebilir.
+## 🗳 Usage
+1. On the home page, press **"Create a new poll"**. You are taken to the poll's manage page (`/manage#<secret>`).
+2. Enter the question and options, then press **Publish**.
+3. Share the poll code or the join link (`/?code=1234`) with participants. Codes have 4 digits; once 4-digit codes are nearly used up, new polls get 5-digit codes.
+4. Follow the results live on the manage page; reset the votes, export the results as Excel/PDF/CSV/JSON, duplicate the poll or delete it. "Import from a JSON file" on the home page creates a new poll from a saved one.
+5. In the **Voting** section you can close and reopen voting, or start it with a timer (30 sec, 1, 2 or 5 min; "+30 sec" extends a running timer). When the time is up voting closes automatically, no more votes are accepted and the results are shown to all participants. "Schedule by date and time" sets a start and/or end time (up to a year ahead): before the start, participants see the poll and a countdown but can't vote yet; with no end, voting stays open until you close it. "Start now" opens voting without waiting, and closing by hand removes the schedule. New polls start open; timers and schedules carry on after a server restart.
+6. For the screen in the room, use **"Open presenter view"** on the manage page (`/present?code=1234`).
 
-* **F** — tam ekran, **H** — sonuçları gizle/göster (oylama bitene kadar katılımcıları etkilememek için). Gizlenen sonuçlar oylama kapandığında otomatik olarak gösterilir.
-* Zamanlayıcı çalışırken büyük bir geri sayım görünür; son 10 saniyede kırmızıya döner. Planlanmış bir anket başlamadan önce başlangıç saati ve başlamasına kalan süre gösterilir.
-* Fare hareketsiz kaldığında düğmeler ve imleç gizlenir.
-* Seçenek sayısı arttıkça yazı boyutu küçülür, gerekirse seçenekler iki sütuna bölünür.
-* QR kodu sunucuda üretilir, internet bağlantısı gerekmez.
+### 🖥 Presenter view
+Shows the question, live result bars, the number of connected participants, and a QR code and the poll code for joining. It is read-only and does not count as a visit; it contains no manage secret, so it is safe to project.
 
-QR kodundaki adres, sunum ekranının açıldığı adresten alınır; sayfa `localhost` üzerinden açıldıysa telefonların erişebilmesi için sunucunun ağ IP adresi kullanılır. Sunucuya bir alan adı veya ters vekil (reverse proxy) üzerinden erişiliyorsa adresi `PUBLIC_URL` ortam değişkeniyle belirleyin, örneğin `PUBLIC_URL=http://anket.firma.local`.
+* **F**: full screen. **H**: hide/show results (so participants aren't swayed until voting ends). Hidden results are shown automatically when voting closes.
+* While a timer runs, a large countdown is shown; it turns red in the last 10 seconds. Before a scheduled start, the start time and a countdown to it are shown.
+* The buttons and cursor hide when the mouse is idle.
+* With more options the text gets smaller, and if needed the options split into two columns.
+* The QR code is generated on the server, so no internet connection is needed.
 
-**Yönetim bağlantısını saklayın:** anketi yönetmenin tek yolu budur ve kaybolursa geri alınamaz. Bağlantıya sahip olan herkes anketi yönetebilir, bu yüzden yalnızca birlikte yönettiğiniz kişilerle paylaşın. Aynı tarayıcıda oluşturduğunuz anketler ana sayfada "Bu tarayıcıda oluşturduğun anketler" altında listelenir. Sunucu, anahtarın yalnızca özetini (SHA-256) saklar.
+The address in the QR code comes from the address the presenter view was opened at; if it was opened via `localhost`, the server's network IP address is used so phones can reach it. If the server is reached through a domain name or a reverse proxy, set the address with the `PUBLIC_URL` environment variable, e.g. `PUBLIC_URL=http://polls.example.local`.
 
-Kötüye kullanımı sınırlamak için aynı adresten saatte en fazla 20 anket oluşturulabilir.
+**Keep the manage link safe:** it is the only way to manage the poll and can't be recovered if lost. Anyone with the link can manage the poll, so share it only with people you manage it with. Polls you created in the same browser are listed on the home page under "Polls you created in this browser". The server stores only a hash (SHA-256) of the secret.
 
-### Docker ile Kurulum
+To limit abuse, at most 20 polls per hour can be created from the same address.
+
+### Docker
 ```bash
 docker build -t poll-app .
 docker run -d -p 80:3000 -v anket-data:/app/data --restart unless-stopped --name poll-system poll-app
 ```
 
-Konteyner içindeki sunucu yetkisiz `node` kullanıcısıyla çalışır (veri dizininin sahipliği açılışta otomatik düzeltilir). İmajda `/healthz` adresini yoklayan bir `HEALTHCHECK` vardır; `docker ps` konteynerin sağlık durumunu gösterir.
+Inside the container the server runs as the unprivileged `node` user (ownership of the data directory is fixed on start-up). The image has a `HEALTHCHECK` that polls `/healthz`; `docker ps` shows the container's health.
 
-### Veri Kalıcılığı
-Anketler, seçenekler, ziyaretçiler ve oylar bir SQLite veritabanında (`data/anket.db`) saklanır ve sunucu yeniden başlatıldığında geri yüklenir. Konum `DATA_DIR` ortam değişkeniyle değiştirilebilir. Node.js'in yerleşik `node:sqlite` modülü kullanıldığı için ek bir veritabanı sunucusu veya derlenmesi gereken bir paket yoktur; **Node.js 22.13 veya üzeri** gerekir.
+### Data persistence
+Polls, options, visitors and votes are stored in a SQLite database (`data/anket.db`) and restored when the server restarts. Change the location with the `DATA_DIR` environment variable. Node.js's built-in `node:sqlite` module is used, so there is no separate database server or native package to compile; **Node.js 22.13 or later** is required.
 
-Docker'da verinin kaybolmaması için yukarıdaki gibi `/app/data` dizinine bir volume bağlayın. Yedek almak için sunucu çalışırken bile `sqlite3 data/anket.db ".backup yedek.db"` kullanılabilir.
+In Docker, mount a volume at `/app/data` as above so the data isn't lost. To take a backup, even while the server is running: `sqlite3 data/anket.db ".backup backup.db"`.
 
-Ortak admin panelli eski sürümden yükseltirken, sahibi olmayan mevcut anketler ve sonuçları veritabanından silinir.
+When upgrading from the old version with a shared admin panel, existing polls without an owner and their results are deleted from the database.
 
-## 🌐 İnternette Yayınlama
+## 🌐 Serving on the internet
 
-### HTTPS ve ters vekil (reverse proxy)
-Uygulamayı internete doğrudan açmayın; önüne HTTPS sağlayan bir ters vekil (nginx, Caddy, Cloudflare vb.) koyun ve şu ortam değişkenlerini ayarlayın:
+### HTTPS and a reverse proxy
+Don't expose the app to the internet directly; put a reverse proxy that provides HTTPS in front of it (nginx, Caddy, Cloudflare, etc.) and set these environment variables:
 
-| Değişken | Açıklama |
+| Variable | Description |
 |---|---|
-| `PORT` | Sunucunun dinlediği port (varsayılan `3000`). |
-| `TRUST_PROXY` | Önünüzdeki vekil sayısı (genellikle `1`). Ayarlanmazsa tüm ziyaretçiler vekilin adresinden geliyor sayılır ve hız sınırlarını birlikte paylaşır; sunucu bu durumda günlüğe bir uyarı yazar. Vekil yokken **ayarlamayın**, yoksa istemciler sahte `X-Forwarded-For` başlığıyla sınırları aşabilir. |
-| `PUBLIC_URL` | Katılım bağlantıları ve QR kodu için genel adres, örn. `https://anket.example.com`. |
-| `VOTER_ID_BURST` | Bir ağdan art arda verilebilecek yeni katılımcı kimliği sayısı (varsayılan `30`). |
-| `VOTER_ID_PER_HOUR` | Bu hakkın saatte kaç kimlik hızıyla dolduğu (varsayılan `360`, yani dakikada 6). |
-| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | İsteğe bağlı Cloudflare Turnstile bot doğrulaması (aşağıda). |
+| `PORT` | Port the server listens on (default `3000`). |
+| `TRUST_PROXY` | Number of proxies in front of the app (usually `1`). If unset, every visitor appears to come from the proxy's address and they all share the rate limits; the server logs a warning in that case. **Don't set it** without a proxy, or clients could bypass the limits with a fake `X-Forwarded-For` header. |
+| `PUBLIC_URL` | Public address for join links and the QR code, e.g. `https://polls.example.com`. |
+| `VOTER_ID_BURST` | How many new participant identities one network can get in a row (default `30`). |
+| `VOTER_ID_PER_HOUR` | How fast that allowance refills, in identities per hour (default `360`, i.e. 6 per minute). |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Optional Cloudflare Turnstile bot check (see below). |
 
-nginx örneği (Socket.IO için WebSocket başlıkları gereklidir):
+nginx example (WebSocket headers are required for Socket.IO):
 
 ```nginx
 location / {
@@ -97,13 +100,12 @@ location / {
 }
 ```
 
-### Tek kişi, tek oy
-Her tarayıcıya sunucu tarafından imzalı, JavaScript'in okuyamadığı (HttpOnly) bir katılımcı çerezi verilir; oy yalnızca geçerli bir çerezle kabul edilir ve her çerez bir ankette bir kez oy verebilir. Kötüye kullanımı sınırlayan asıl önlem, **yeni** çerezlerin ağ (IP adresi; IPv6'da /64 bloğu) başına sınırlı hızda verilmesidir: çerezini silip yeniden gelen biri ya da bir betik, varsayılan ayarlarla bir ağdan en fazla 30 kimlik alır, ardından dakikada 6 ile sınırlanır. Sınıra takılan ziyaretçi bir uyarı görür ve beklemesi gereken süre dolunca otomatik olarak katılır.
+### One person, one vote
+Each browser gets a participant cookie signed by the server that JavaScript can't read (HttpOnly). Votes are accepted only with a valid cookie, and each cookie can vote once per poll. The main safeguard is that **new** cookies are handed out at a limited rate per network (IP address; /64 block for IPv6): someone who deletes their cookie and comes back, or a script, gets at most 30 identities from one network with the default settings, then 6 per minute. A visitor who hits the limit sees a notice and joins automatically once the wait is over.
 
-**Aynı Wi-Fi'yi paylaşan kalabalık etkinlikler:** Salondaki herkes tek bir genel IP adresinden çıkıyorsa bu sınır gerçek katılımcıları da bekletebilir. Bu durumda Turnstile'ı açıp `VOTER_ID_BURST` değerini katılımcı sayısına göre yükseltin (örn. `300`).
+**Crowded events sharing one Wi-Fi:** If everyone in the room goes out through a single public IP address, this limit can make real participants wait. In that case, turn on Turnstile and raise `VOTER_ID_BURST` to match the number of participants (e.g. `300`).
 
-### Cloudflare Turnstile (önerilir)
-Turnstile, ücretsiz ve çoğu zaman görünmez bir bot doğrulamasıdır; açıkken yeni bir katılımcı kimliği ancak doğrulamayı geçen tarayıcılara verilir, bu da betiklerle toplu oy kullanmayı büyük ölçüde engeller. Cloudflare panelinden (Turnstile → Add site) alan adınız için bir site oluşturup `TURNSTILE_SITE_KEY` ve `TURNSTILE_SECRET_KEY` değerlerini ayarlayın. Açıkken sayfalar Cloudflare'in betiğini yükler; İçerik Güvenlik Politikası buna göre otomatik genişletilir.
+### Cloudflare Turnstile (recommended)
+Turnstile is a free, mostly invisible bot check. When it's on, a new participant identity is only issued to browsers that pass the check, which largely stops scripted vote stuffing. Create a site for your domain in the Cloudflare dashboard (Turnstile → Add site) and set `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`. When it's on, the pages load Cloudflare's script; the Content Security Policy is widened for it automatically.
 
-Bu önlemler kararlı bir saldırganı tamamen durduramaz (farklı ağlardan gelen çok sayıda cihaz gibi); gerçek anlamda "kişi başı tek oy" için kullanıcı girişi gerekir.
-
+These measures can't completely stop a determined attacker (for example, many devices on different networks); true "one vote per person" needs user sign-in.

@@ -78,7 +78,7 @@ function openDatabase(dataDir) {
 
     const version = db.prepare('PRAGMA user_version').get().user_version;
     if (version > SCHEMA_VERSION) {
-        throw new Error(`Veritabanı şeması (${version}) bu sürümden (${SCHEMA_VERSION}) daha yeni.`);
+        throw new Error(`The database schema (${version}) is newer than this version supports (${SCHEMA_VERSION}).`);
     }
     for (let v = version; v < SCHEMA_VERSION; v++) {
         transaction(db, () => {

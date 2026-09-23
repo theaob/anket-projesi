@@ -5,12 +5,13 @@
   const secret = location.hash.slice(1);
   const SVG = 'http://www.w3.org/2000/svg';
 
-  const int = (n) => n.toLocaleString('tr-TR');
-  const pct = (share) => '%' + (Math.round(share * 1000) / 10).toLocaleString('tr-TR');
-  const dateTime = (ms) => new Date(ms).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' });
-  const time = (ms, withDay) => new Date(ms).toLocaleString('tr-TR', withDay
-    ? { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }
-    : { hour: '2-digit', minute: '2-digit' });
+  const int = (n) => n.toLocaleString('en-US');
+  const pct = (share) => (Math.round(share * 1000) / 10).toLocaleString('en-US') + '%';
+  const votesText = (n) => `${int(n)} ${n === 1 ? 'vote' : 'votes'}`;
+  const dateTime = (ms) => new Date(ms).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  const time = (ms, withDay) => new Date(ms).toLocaleString('en-US', withDay
+    ? { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }
+    : { hour: 'numeric', minute: '2-digit' });
 
   function el(tag, props = {}, ...children) {
     const node = document.createElement(tag);
@@ -26,27 +27,27 @@
   }
 
   function render(r) {
-    document.title = `${r.code} · Anket Raporu`;
+    document.title = `${r.code} · Poll Report`;
     $('question').textContent = r.question;
-    const status = { closed: 'Kapalı', scheduled: 'Planlandı', open: 'Açık' }[r.voting.phase];
-    const meta = [['Kod', r.code], ['Oylama', status], ['Rapor', dateTime(r.exportedAt)]];
-    if (r.voting.closesAt) meta.splice(2, 0, ['Bitiş', dateTime(r.voting.closesAt)]);
-    if (r.voting.opensAt) meta.splice(2, 0, ['Başlangıç', dateTime(r.voting.opensAt)]);
-    if (r.createdAt) meta.splice(2, 0, ['Oluşturulma', dateTime(r.createdAt)]);
+    const status = { closed: 'Closed', scheduled: 'Scheduled', open: 'Open' }[r.voting.phase];
+    const meta = [['Code', r.code], ['Voting', status], ['Report', dateTime(r.exportedAt)]];
+    if (r.voting.closesAt) meta.splice(2, 0, ['Ends', dateTime(r.voting.closesAt)]);
+    if (r.voting.opensAt) meta.splice(2, 0, ['Starts', dateTime(r.voting.opensAt)]);
+    if (r.createdAt) meta.splice(2, 0, ['Created', dateTime(r.createdAt)]);
     $('meta').replaceChildren(...meta.map(([k, v]) => el('span', {}, k + ': ', el('strong', { textContent: v }))));
 
     const f = r.funnel;
     const tiles = [
-      ['Ziyaretçi', int(f.visitors)],
-      ['Oy veren', int(f.voted)],
-      ['Katılım oranı', f.participation === null ? '—' : pct(f.participation)],
-      ['Oy vermeden ayrılan', int(f.abandoned)]
+      ['Visitors', int(f.visitors)],
+      ['Voted', int(f.voted)],
+      ['Participation rate', f.participation === null ? '—' : pct(f.participation)],
+      ['Left without voting', int(f.abandoned)]
     ];
     $('tiles').replaceChildren(...tiles.map(([k, v]) => el('div', { className: 'tile' },
       el('span', { textContent: k }), el('strong', { textContent: v }))));
 
     // Bars scale to the largest option, so the leader spans the track.
-    $('total').textContent = `${int(r.totalVotes)} oy`;
+    $('total').textContent = votesText(r.totalVotes);
     const max = Math.max(1, ...r.options.map(o => o.votes));
     $('bars').replaceChildren(...r.options.flatMap(o => [
       el('div', { className: 'label', textContent: o.text }),
@@ -61,10 +62,10 @@
       el('td', { className: 'num', textContent: int(o.votes) }),
       el('td', { className: 'num', textContent: pct(o.share) }))));
     $('table-total').textContent = int(r.totalVotes);
-    $('table-total-pct').textContent = r.totalVotes ? '%100' : '%0';
+    $('table-total-pct').textContent = r.totalVotes ? '100%' : '0%';
 
     renderTimeline(r.timeline);
-    $('foot').textContent = 'Saatler bu cihazın saat dilimindedir. Oy saatleri ve ayrıntılar için Excel dışa aktarımını kullanın.';
+    $('foot').textContent = 'Times are in this device\'s time zone. For vote times and more detail, use the Excel export.';
     $('message').hidden = true;
     $('page').hidden = false;
     $('toolbar').hidden = false;
@@ -75,11 +76,11 @@
   function renderTimeline(t) {
     const box = $('timeline');
     if (!t.buckets.length) {
-      box.replaceChildren(el('p', { className: 'empty', textContent: 'Henüz oy verilmedi.' }));
+      box.replaceChildren(el('p', { className: 'empty', textContent: 'No votes yet.' }));
       $('bucket').textContent = '';
       return;
     }
-    $('bucket').textContent = `${t.bucketMinutes} dakikalık aralıklarla`;
+    $('bucket').textContent = `in ${t.bucketMinutes}-minute intervals`;
     const W = 720, H = 220, left = 34, right = 8, top = 18, bottom = 28;
     const plotW = W - left - right, plotH = H - top - bottom;
     const n = t.buckets.length;
@@ -96,7 +97,7 @@
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     svg.setAttribute('class', 'chart');
     svg.setAttribute('role', 'img');
-    svg.setAttribute('aria-label', `Zamana göre oylar: en yoğun aralıkta ${peak} oy`);
+    svg.setAttribute('aria-label', `Votes over time: ${votesText(peak)} in the busiest interval`);
     const add = (tag, attrs, text) => {
       const node = document.createElementNS(SVG, tag);
       for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
@@ -124,7 +125,7 @@
           d: `M${x0},${yb}V${yt + r}Q${x0},${yt} ${x0 + r},${yt}H${x1 - r}Q${x1},${yt} ${x1},${yt + r}V${yb}Z`
         });
         const tip = document.createElementNS(SVG, 'title');
-        tip.textContent = `${time(b.start, withDay)}: ${b.votes} oy (toplam ${b.cumulative})`;
+        tip.textContent = `${time(b.start, withDay)}: ${votesText(b.votes)} (total ${b.cumulative})`;
         bar.appendChild(tip);
         if (b.votes === peak && !peakLabelled) {
           peakLabelled = true;
@@ -137,7 +138,7 @@
   }
 
   if (!secret) {
-    showMessage('Rapor bağlantısı eksik. Raporu anketin yönetim sayfasından açın.');
+    showMessage('The report link is incomplete. Open the report from the poll\'s manage page.');
     return;
   }
   $('back').href = '/manage#' + secret;

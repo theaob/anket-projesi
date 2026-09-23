@@ -38,7 +38,7 @@ jobs:
           context: .
           push: true
           platforms: linux/amd64
-          # :vX.Y.Z (tam versiyon) + :latest birlikte yayınlanır
+          # :vX.Y.Z (full version) and :latest are published together
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/anket-app:v${{ steps.pkg.outputs.VERSION }}
             ${{ secrets.DOCKERHUB_USERNAME }}/anket-app:latest
