@@ -5,11 +5,26 @@ ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-23
+
 ### Güvenlik
 - **CSV formül enjeksiyonu**: Dışa aktarılan dosyada `=`, `+`, `-` veya `@` ile başlayan seçenek metinleri artık başına `'` eklenerek yazılıyor; Excel bunları formül olarak çalıştırmıyor.
 - **Docker imajı yetkisiz kullanıcıyla çalışıyor**: Sunucu artık `root` yerine `node` kullanıcısıyla çalışıyor. v2.0.0 ile oluşturulmuş veri volume'lerinin sahipliği açılışta otomatik olarak düzeltiliyor.
 
 ### Eklendi
+- **Tarih ve saatle planlanan oylama**: Yönetim sayfasındaki "Tarih ve saatle planla" ile oylamanın başlangıç ve/veya bitiş tarih ve saati seçilebiliyor (en fazla bir yıl sonrası; saatler yöneticinin cihazının saat diliminde).
+  - Başlangıçtan önce katılımcılar anketi görüyor ama oy veremiyor; oy ekranında ve sunum ekranında başlangıç saati ve başlamasına kalan süre gösteriliyor. Başlangıç zamanı gelince oylama kendiliğinden açılıyor (ekran okuyucuya "Oylama başladı" duyuruluyor), bitişte kapanıyor.
+  - Geri sayımlar artık saat ve günleri de gösteriyor (ör. `1:02:09`, `3 g 4 sa`); bitişi bir saatten uzak olan oylamalarda bitiş tarihi gösteriliyor.
+  - "Şimdi başlat" planlanmış bir oylamayı bitiş zamanını koruyarak hemen açıyor; "+30 sn" tarihle belirlenmiş bitişlerde de çalışıyor; elle kapatmak planı kaldırıyor.
+  - Plan sunucu yeniden başlatılsa da korunuyor; sunucu kapalıyken başlangıç zamanı geçtiyse açılışta oylama açılıyor. 24 günden uzak tarihler de doğru işleniyor.
+  - Dışa aktarmalar ve PDF raporu başlangıç ve bitiş zamanını da içeriyor.
+- **Zengin dışa aktarma**: Yönetim sayfasında yeni "Dışa aktar" bölümü.
+  - **Excel (.xlsx)**: Özet (soru, tarihler, oylama durumu, ziyaretçi / oy veren / oy vermeden ayrılan / bağlı, katılım oranı, ilk ve son oy), sonuçlar ve yerleşik çubuk grafik, her oyun saati ve seçeneği (katılımcı kimliği olmadan), zaman çizelgesi ve sütun grafik. Saatler indiren cihazın saat diliminde. Harici kütüphane kullanılmıyor.
+  - **PDF raporu**: Özet kutuları, sonuç çubukları, zamana göre oy grafiği ve sonuç tablosu içeren yazdırılabilir sayfa (`/report#…`); "PDF olarak kaydet / Yazdır" ile PDF alınır. Yalnızca yönetim bağlantısına sahip olanlar açabilir.
+  - **CSV**: Artık yüzdeler, katılım bilgileri ve oy saatleri de var; Türkçe karakterler bozulmadan yazılıyor.
+  - **JSON**: Soru, seçenekler ve sonuçlar (oy sayıları, oy saatleri).
+- **JSON içe aktarma**: Ana sayfada "JSON dosyasından içe aktar" ile dışa aktarılmış bir dosyadan (veya `{ "question": "...", "options": [...] }`) yeni anket oluşturulabiliyor; yönetim sayfasında "JSON'dan yükle" soruyu ve seçenekleri düzenleyiciye dolduruyor ("Yayınla"ya basılana kadar kaydedilmez). Sonuçlar içe aktarılmaz. Dosya sunucuda doğrulanıyor (en fazla 20 seçenek, 200 karakter).
+- **Anketi kopyala**: Yönetim sayfasında "Kopyasını oluştur" aynı soru ve seçeneklerle, oysuz yeni bir anket açıyor.
 - **Canlı emoji tepkileri**: Oy verdikten (veya oylama kapandıktan) sonra katılımcılar sonuçların altındaki 👍 ❤️ 😂 😮 👏 🤔 düğmeleriyle tepki gönderebiliyor. Tepkiler herkesin sonuç ekranında ve sunum ekranında (QR kodun üstüne değil, sonuçların üzerinde, salonun arkasından görülecek büyüklükte) yukarı süzülüyor. Oy vermemiş katılımcılar başkalarının tepkilerini görmüyor. Sunucu tepkileri 300 ms'lik gruplar halinde sayı olarak gönderiyor ve katılımcı başına sınırlıyor (10'luk ani seri, sonra saniyede ~1); ekrandaki emoji sayısı da sınırlı. "Hareketi azalt" ayarında emojiler yerinde belirip kayboluyor.
 - **Erişilebilirlik**: Tüm sayfalar axe-core denetiminde WCAG 2 A/AA ihlali vermiyor. Metin ve düğme renkleri 4.5:1 kontrasta (başlık gradyanı büyük yazı için 3:1'e) getirildi; tüm denetimlerde klavye odak halkası var; bağlantı alanlarının etiketleri, sayfa başlıkları ve `<main>` bölgeleri eklendi. Oy ekranında sonuç düğmeleri ekran okuyucuya "Evet: %60, 3 oy" gibi okunuyor, oy kaydı ve oylamanın kapanması duyuruluyor (geri sayım her saniye okunmuyor), ankete katılınca odak soruya geçiyor; dekoratif emoji efektleri ekran okuyucudan gizlendi.
 - **ESLint**: `npm run lint`; CI'da testlerle birlikte çalışıyor.

@@ -9,6 +9,7 @@ const proxyaddr = require('proxy-addr');
 const { openDatabase } = require('./db');
 const { createIdentity, verifyTurnstile } = require('./identity');
 const { clientKey, createLimiter: createLimiter_ } = require('./rate-limit');
+const exporter = require('./export');
 
 // ── Configuration (environment variables, see README) ──────────
 const envInt = (name, fallback) => {
@@ -121,6 +122,9 @@ app.get('/manage', (req, res) => res.sendFile(path.join(__dirname, 'public', 'ma
 app.get('/present', (req, res) => res.sendFile(path.join(__dirname, 'public', 'present.html'), {
     headers: { 'Cache-Control': 'no-cache' }
 }));
+app.get('/report', (req, res) => res.sendFile(path.join(__dirname, 'public', 'report.html'), {
+    headers: { 'Cache-Control': 'no-cache' }
+}));
 
 // QR code for a poll's join link, drawn on the server so it works without
 // internet access.
@@ -156,7 +160,8 @@ const reactionLimiter = createLimiter_({ burst: 10, perHour: 3600 });
 // polls: Map<code: string, poll>
 // poll: { code, question, options: string[], votes: number[],
 //         visitors: Map<voterId, { voted: boolean, choice: number|null }>,
-//         closed: boolean, closesAt: number|null  (timer deadline, ms),
+//         closed: boolean, opensAt / closesAt: number|null  (scheduled start
+//         and end, ms),
 //         active: Map<voterId, number>  (live socket count, not persisted),
 //         leftAt: Map<voterId, ms>  (when their last socket closed, not persisted),
 //         timer  (pending auto-close timeout, not persisted),
@@ -175,12 +180,10 @@ function loadPolls() {
     for (const p of db.loadAll()) {
         const poll = { ...p, active: new Map(), timer: null };
         polls.set(p.code, poll);
-        // A timer that ran out while the server was down closes the poll now;
-        // one still running carries on.
-        if (poll.closesAt && !poll.closed) {
-            if (poll.closesAt <= Date.now()) closeVoting(poll);
-            else scheduleClose(poll);
-        }
+        // An end time that passed while the server was down closes the poll
+        // now; a start or end still ahead is scheduled again.
+        if (!poll.closed && votingPhase(poll) === 'closed') closeVoting(poll);
+        else scheduleVoting(poll);
     }
     console.log(`📂 ${polls.size} anket yüklendi (${path.join(DATA_DIR, 'anket.db')})`);
 }
@@ -222,41 +225,72 @@ function generateCode() {
 const MIN_TIMER_SEC = 5;
 const MAX_TIMER_SEC = 60 * 60;
 
+// Longest schedule: a start or end date at most this far ahead.
+const MAX_SCHEDULE_MS = 366 * 24 * 60 * 60 * 1000;
+
+// 'scheduled' (a start time is set and not reached yet), 'open' or 'closed'.
+function votingPhase(poll, now = Date.now()) {
+    if (poll.closed || (poll.closesAt && now >= poll.closesAt)) return 'closed';
+    if (poll.opensAt && now < poll.opensAt) return 'scheduled';
+    return 'open';
+}
+
 function isOpen(poll) {
-    return !poll.closed && !(poll.closesAt && Date.now() >= poll.closesAt);
+    return votingPhase(poll) === 'open';
 }
 
-// Sent to every client; the remaining time rather than the deadline, so a
-// device whose clock is wrong still counts down correctly.
+// Sent to every client. Countdowns use the time remaining rather than the
+// deadline, so a device whose clock is wrong still counts down correctly;
+// opensAt/closesAt are only for showing the date and time.
 function votingView(poll) {
-    const open = isOpen(poll);
-    return { open, remainingMs: open && poll.closesAt ? poll.closesAt - Date.now() : null };
+    const now = Date.now();
+    const phase = votingPhase(poll, now);
+    return {
+        phase,
+        open: phase === 'open',
+        remainingMs: phase === 'open' && poll.closesAt ? poll.closesAt - now : null,
+        startsInMs: phase === 'scheduled' ? poll.opensAt - now : null,
+        opensAt: phase === 'scheduled' ? poll.opensAt : null,
+        closesAt: phase === 'closed' ? null : poll.closesAt
+    };
 }
 
-function scheduleClose(poll) {
+// setTimeout can't wait longer than about 24.8 days, and schedules can be
+// set up to a year ahead: long waits are done in steps of at most a day.
+const MAX_TIMER_STEP_MS = 24 * 60 * 60 * 1000;
+
+// Runs the next scheduled change (start or end) when its time comes.
+function scheduleVoting(poll) {
     clearTimeout(poll.timer);
     poll.timer = null;
-    if (poll.closed || !poll.closesAt) return;
+    const phase = votingPhase(poll);
+    const next = phase === 'scheduled' ? poll.opensAt : phase === 'open' ? poll.closesAt : null;
+    if (!next) return;
     poll.timer = setTimeout(() => {
         try {
-            closeVoting(poll);
+            if (polls.get(poll.code) !== poll) return;
+            if (Date.now() < next) return scheduleVoting(poll); // a step of a long wait
+            if (votingPhase(poll) === 'closed') closeVoting(poll);
+            else scheduleVoting(poll);
             notifyAll(poll);
         } catch (err) {
-            console.error('Oylama zamanlayıcısı kapatılamadı:', err);
+            console.error('Oylama zamanlayıcısı çalışamadı:', err);
         }
-    }, Math.max(0, poll.closesAt - Date.now()));
+    }, Math.min(MAX_TIMER_STEP_MS, Math.max(0, next - Date.now())));
 }
 
 // Database first, then memory, like every other change.
-function setVoting(poll, closed, closesAt) {
-    db.setVoting(poll.code, closed, closesAt);
+function setVoting(poll, { closed, opensAt = null, closesAt = null }) {
+    db.setVoting(poll.code, closed, opensAt, closesAt);
     poll.closed = closed;
+    poll.opensAt = opensAt;
     poll.closesAt = closesAt;
-    scheduleClose(poll);
+    scheduleVoting(poll);
 }
 
+// Closing clears any schedule: reopening starts from a clean state.
 function closeVoting(poll) {
-    setVoting(poll, true, null);
+    setVoting(poll, { closed: true });
 }
 
 // The manage secret is only ever shown to the poll's creator; the database
@@ -400,6 +434,17 @@ function cleanText(value) {
     return typeof value === 'string' ? value.trim().slice(0, MAX_TEXT) : '';
 }
 
+// Question and options for a new poll, from an imported JSON file (our own
+// export, or a bare { question, options }) or a poll being duplicated.
+// Returns null if there is nothing usable.
+function pollTemplate(value) {
+    const source = value?.poll && typeof value.poll === 'object' ? value.poll : value;
+    if (!source || typeof source !== 'object' || !Array.isArray(source.options)) return null;
+    const options = source.options.slice(0, MAX_OPTIONS * 5).map(cleanText).filter(Boolean).slice(0, MAX_OPTIONS);
+    const question = cleanText(source.question);
+    return question || options.length ? { question: question || 'Yeni Anket', options } : null;
+}
+
 function sameOptions(a, b) {
     return a.length === b.length && a.every((opt, i) => opt === b[i]);
 }
@@ -426,27 +471,6 @@ function leavePoll(socket) {
     }
     return poll;
 }
-
-// A quoted CSV cell. Text starting with = + - @ (or a tab/carriage return) is
-// prefixed with an apostrophe so spreadsheets show it instead of running it
-// as a formula; option text is written by whoever created the poll.
-function csvCell(value) {
-    let text = String(value);
-    if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
-    return `"${text.replace(/"/g, '""')}"`;
-}
-
-function buildCsv(poll) {
-    let csvContent = "\uFEFF";
-    csvContent += "Secenek,Oy Sayisi\n";
-    poll.options.forEach((opt, i) => {
-        csvContent += `${csvCell(opt)},${poll.votes[i] || 0}\n`;
-    });
-    csvContent += `\nZiyaret,${poll.visitors.size}\n`;
-    csvContent += `Oy Vermeden Ayrilan,${abandonedCount(poll)}\n`;
-    return csvContent;
-}
-
 
 const getLocalIp = () => {
     const interfaces = os.networkInterfaces();
@@ -510,17 +534,29 @@ io.on('connection', (socket) => {
     const ownedPoll = (code) => (socket.data.owned.has(code) ? polls.get(code) : null);
 
     // ── Owner events ───────────────────────────────────────────
-    on('createPoll', (ack) => {
+    // createPoll(ack) makes an empty poll; createPoll({ template }, ack)
+    // starts it with a question and options (JSON import, duplicating).
+    on('createPoll', (...args) => {
+        const ack = args[args.length - 1];
+        const payload = args.length > 1 ? args[0] : null;
+        let template = null;
+        if (payload?.template !== undefined) {
+            template = pollTemplate(payload.template);
+            if (!template) return reply(ack, { error: 'Dosyada soru veya seçenek bulunamadı.' });
+        }
         if (!createLimiter.take(clientKey(socket.data.ip)).ok) {
             return reply(ack, { error: 'Çok fazla anket oluşturuldu, lütfen daha sonra tekrar deneyin.' });
         }
         const code = generateCode();
         if (!code) return reply(ack, { error: 'Şu anda boş anket kodu yok, lütfen daha sonra tekrar deneyin.' });
         const secret = crypto.randomBytes(24).toString('base64url');
-        db.createPoll(code, 'Yeni Anket', hashSecret(secret));
+        const question = template?.question ?? 'Yeni Anket';
+        const options = template?.options ?? [];
+        db.createPoll(code, question, hashSecret(secret));
+        if (options.length) db.updatePoll(code, question, options);
         polls.set(code, {
-            code, question: 'Yeni Anket', options: [], votes: [], visitors: new Map(),
-            closed: false, closesAt: null, active: new Map(), timer: null
+            code, question, options, votes: options.map(() => 0), visitors: new Map(),
+            closed: false, opensAt: null, closesAt: null, active: new Map(), timer: null
         });
         reply(ack, { code, secret });
     });
@@ -593,20 +629,51 @@ io.on('connection', (socket) => {
         if (payload.open !== true) {
             closeVoting(poll);
         } else if (payload.seconds === undefined || payload.seconds === null) {
-            setVoting(poll, false, null);
+            setVoting(poll, { closed: false });
         } else {
             const seconds = payload.seconds;
             if (!Number.isInteger(seconds) || seconds < MIN_TIMER_SEC || seconds > MAX_TIMER_SEC) return;
-            setVoting(poll, false, Date.now() + seconds * 1000);
+            setVoting(poll, { closed: false, closesAt: Date.now() + seconds * 1000 });
         }
         notifyAll(poll);
     });
 
+    // Schedules voting by date and time: { code, opensAt, closesAt }, each
+    // ms since the epoch or null. A start in the past (or none) opens voting
+    // now; no end keeps it open until closed by hand.
+    on('setSchedule', (payload, ack) => {
+        const poll = ownedPoll(payload?.code);
+        if (!poll) return reply(ack, { error: 'Anket bulunamadı.' });
+        const now = Date.now();
+        const valid = (t) => t === null || t === undefined || (Number.isSafeInteger(t) && t <= now + MAX_SCHEDULE_MS);
+        if (!valid(payload.opensAt) || !valid(payload.closesAt)) return reply(ack, { error: 'Geçersiz tarih.' });
+        const opensAt = payload.opensAt > now ? payload.opensAt : null;
+        const closesAt = payload.closesAt ?? null;
+        if (opensAt === null && closesAt === null) return reply(ack, { error: 'Başlangıç veya bitiş zamanı seçin.' });
+        if (closesAt !== null && closesAt < (opensAt ?? now) + MIN_TIMER_SEC * 1000) {
+            return reply(ack, { error: opensAt ? 'Bitiş, başlangıçtan sonra olmalı.' : 'Bitiş zamanı gelecekte olmalı.' });
+        }
+        setVoting(poll, { closed: false, opensAt, closesAt });
+        notifyAll(poll);
+        reply(ack, { ok: true });
+    });
+
     // Returned over the socket rather than from a URL so the manage secret
     // never has to appear in a link or a server log.
-    on('exportCsv', (code, ack) => {
-        const poll = ownedPoll(code);
-        reply(ack, poll ? { csv: buildCsv(poll) } : { error: 'Anket bulunamadı.' });
+    // Results as a file ({ filename, mime, data }) in the requested format,
+    // or, for 'report', the data the printable report page draws.
+    on('exportPoll', (payload, ack) => {
+        const poll = ownedPoll(payload?.code);
+        const format = Object.hasOwn(exporter.FORMATS, payload?.format) ? exporter.FORMATS[payload.format] : null;
+        if (!poll || !format) return reply(ack, { error: 'Anket bulunamadı.' });
+        const tz = Number.isInteger(payload.tzOffset) && Math.abs(payload.tzOffset) <= 14 * 60 ? payload.tzOffset : 0;
+        const { phase, opensAt, closesAt } = votingView(poll);
+        const report = exporter.buildReport(poll, db.exportDetails(poll.code), {
+            abandoned: abandonedCount(poll),
+            connected: poll.active.size,
+            voting: { phase, opensAt, closesAt }
+        }, tz);
+        reply(ack, format(report));
     });
 
     // ── Presenter screen ───────────────────────────────────────

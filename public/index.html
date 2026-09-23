@@ -85,6 +85,9 @@
     overflow: hidden; transition: transform .15s ease; }
   .poll-opt:hover { transform: translateX(3px); }
   .poll-opt:disabled { cursor: default; }
+  /* Before a scheduled start the options are shown but can't be chosen yet. */
+  .poll[data-phase="scheduled"] .poll-opt { opacity: .55; }
+  .poll[data-phase="scheduled"] .poll-opt:hover { transform: none; }
   .poll-opt .fill { position: absolute; inset: 0; width: 0%; z-index: 0;
     background: linear-gradient(90deg, rgba(91, 82, 232, 0.18), rgba(168, 85, 247, 0.28));
     transition: width .7s cubic-bezier(.2,.8,.2,1); transition-delay: var(--bardelay, 0s); }
@@ -115,6 +118,10 @@
   .btn-create:hover { background: #f5f2ff; transform: translateY(-1px); }
   .btn-create:focus-visible { outline: 3px solid #7e22ce; outline-offset: 2px; }
   .btn-create:disabled { opacity: .6; cursor: default; transform: none; }
+  .btn-import { margin-top: 8px; border: none; background: none; padding: 6px; font: inherit; font-size: 14px; font-weight: 600;
+    color: #5b52e8; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .btn-import:hover { color: #7e22ce; }
+  .btn-import:focus-visible { outline: 3px solid #7e22ce; outline-offset: 2px; border-radius: 6px; }
   .my-polls { margin-top: 18px; text-align: left; }
   .my-polls h2 { margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6880; }
   .my-polls ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 232px; overflow-y: auto; }
@@ -154,6 +161,8 @@
 
     <div class="create">
       <button type="button" class="btn-create" id="btn-create">+ Yeni anket oluştur</button>
+      <button type="button" class="btn-import" id="btn-import">veya JSON dosyasından içe aktar</button>
+      <input type="file" id="import-file" accept=".json,application/json" hidden>
       <p class="error" id="create-error" role="alert"></p>
       <div class="my-polls" id="my-polls" hidden>
         <h2>Bu tarayıcıda oluşturduğun anketler</h2>

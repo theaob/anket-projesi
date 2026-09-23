@@ -124,18 +124,72 @@
     }
 
     // Voting state as last reported by the countdown.
-    let voting = { open: true, remainingMs: null };
+    let voting = { phase: 'open', open: true, remainingMs: null, opensAt: null, closesAt: null };
     const votingTimer = VotingTimer.create((state) => {
         voting = state;
         const timed = state.open && state.remainingMs !== null;
         const status = $('voting-status');
-        status.classList.toggle('closed', !state.open);
+        status.classList.toggle('closed', state.phase !== 'open');
         status.classList.toggle('urgent', timed && state.remainingMs <= 10000);
-        status.textContent = !state.open ? 'Oylama kapalı' : timed ? `Oylama açık · ${state.text} kaldı` : 'Oylama açık';
+        const end = state.closesAt ? `, bitiş ${VotingTimer.formatDate(state.closesAt)}` : '';
+        if (state.phase === 'closed') status.textContent = 'Oylama kapalı';
+        else if (state.phase === 'scheduled') {
+            status.textContent = `Planlandı · ${VotingTimer.formatDate(state.opensAt)} başlangıç`
+                + (state.startsInMs > 0 ? ` (${state.text} sonra)` : '') + end;
+        } else status.textContent = timed ? `Oylama açık · ${state.text} kaldı${state.remainingMs > 3600000 ? end : ''}` : 'Oylama açık';
         const toggle = $('btn-voting');
-        toggle.textContent = state.open ? '■ Oylamayı kapat' : '▶ Oylamayı aç';
-        toggle.className = state.open ? 'btn-close' : 'btn-open';
+        toggle.textContent = { open: '■ Oylamayı kapat', scheduled: '▶ Şimdi başlat', closed: '▶ Oylamayı aç' }[state.phase];
+        toggle.className = state.phase === 'open' ? 'btn-close' : 'btn-open';
         $('timer-running').hidden = !timed;
+    });
+
+    // ── Scheduling by date and time ──────────────────────────
+    // datetime-local inputs work in this device's local time.
+    function toInputValue(ms) {
+        if (!ms) return '';
+        const d = new Date(ms);
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    function fromInputValue(value) {
+        if (!value) return null;
+        const ms = new Date(value).getTime();
+        return Number.isNaN(ms) ? undefined : ms;
+    }
+
+    // Shows the saved schedule in the form, unless the owner is editing it.
+    let scheduleDirty = false;
+    function fillSchedule(v) {
+        $('sched-start').min = $('sched-end').min = toInputValue(Date.now());
+        if (scheduleDirty) return;
+        $('sched-start').value = toInputValue(v.phase === 'scheduled' ? v.opensAt : null);
+        $('sched-end').value = toInputValue(v.phase !== 'closed' ? v.closesAt : null);
+    }
+    ['sched-start', 'sched-end'].forEach((id) => $(id).addEventListener('input', () => { scheduleDirty = true; }));
+
+    function saveSchedule(opensAt, closesAt, onDone) {
+        socket.emit('setSchedule', { code: poll.code, opensAt, closesAt }, (res) => {
+            $('schedule-status').textContent = res.error || '';
+            if (onDone) onDone(res);
+        });
+    }
+
+    $('schedule-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (!poll) return;
+        const opensAt = fromInputValue($('sched-start').value);
+        const closesAt = fromInputValue($('sched-end').value);
+        if (opensAt === undefined || closesAt === undefined) {
+            $('schedule-status').textContent = 'Tarih ve saati eksiksiz girin.';
+            return;
+        }
+        saveSchedule(opensAt, closesAt, (res) => {
+            if (res.error) return;
+            scheduleDirty = false;
+            $('schedule-status').textContent = opensAt && opensAt > Date.now()
+                ? `Plan kaydedildi. Oylama kendiliğinden açılacak: ${VotingTimer.formatDate(opensAt)}.`
+                : 'Plan kaydedildi.';
+        });
     });
 
     function setVoting(open, seconds) {
@@ -149,11 +203,13 @@
         $('code').textContent = p.code;
         $('share-link').value = `${location.origin}/?code=${p.code}`;
         $('present-link').href = `/present?code=${p.code}`;
+        $('report-link').href = `/report#${secret}`;
         $('manage-link').value = location.href;
         document.title = `${p.code} · Anketi Yönet`;
         renderStats();
         renderResults();
         votingTimer.set(p.voting);
+        fillSchedule(p.voting);
         if (refillEditor) fillEditor();
         rememberPoll(p);
     }
@@ -188,13 +244,17 @@
 
     $('btn-add').addEventListener('click', () => addOption());
 
-    $('btn-voting').addEventListener('click', () => setVoting(!voting.open));
+    // "Start now" on a scheduled poll keeps its end time.
+    $('btn-voting').addEventListener('click', () => {
+        if (voting.phase === 'scheduled' && voting.closesAt) saveSchedule(null, voting.closesAt);
+        else setVoting(voting.phase !== 'open');
+    });
     document.querySelectorAll('#timer-presets button').forEach((btn) => {
         btn.addEventListener('click', () => setVoting(true, Number(btn.dataset.seconds)));
     });
+    // Moves the end 30 seconds later, whether it came from a countdown or a date.
     $('btn-extend').addEventListener('click', () => {
-        if (voting.remainingMs === null) return;
-        setVoting(true, Math.min(3600, Math.ceil(voting.remainingMs / 1000) + 30));
+        if (poll && voting.closesAt) saveSchedule(null, voting.closesAt + 30000);
     });
     $('btn-untimed').addEventListener('click', () => setVoting(true));
 
@@ -222,18 +282,80 @@
         }
     });
 
-    $('btn-export').addEventListener('click', () => {
+    // ── Export ──────────────────────────────────────────────
+    // The server builds the file; times in it are written in this device's
+    // time zone.
+    function download(filename, mime, data) {
+        const url = URL.createObjectURL(new Blob([data], { type: mime }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    document.querySelectorAll('[data-export]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            if (!poll) return;
+            btn.disabled = true;
+            $('export-status').textContent = 'Hazırlanıyor…';
+            socket.timeout(15000).emit('exportPoll',
+                { code: poll.code, format: btn.dataset.export, tzOffset: new Date().getTimezoneOffset() },
+                (err, res) => {
+                    btn.disabled = false;
+                    if (err || res.error) {
+                        $('export-status').textContent = res?.error || 'Dışa aktarılamadı, lütfen tekrar deneyin.';
+                        return;
+                    }
+                    download(res.filename, res.mime, res.data);
+                    $('export-status').textContent = `${res.filename} indirildi.`;
+                });
+        });
+    });
+
+    // ── Import and duplicate ─────────────────────────────────
+    // Question and options from a JSON file: this app's export, or a plain
+    // { "question": "...", "options": ["...", ...] }. Returns null if unusable.
+    function readTemplate(text) {
+        let data;
+        try { data = JSON.parse(text); } catch (e) { return null; }
+        const source = data && typeof data.poll === 'object' && data.poll ? data.poll : data;
+        if (!source || !Array.isArray(source.options)) return null;
+        const options = source.options.filter(o => typeof o === 'string' && o.trim()).map(o => o.trim());
+        const question = typeof source.question === 'string' ? source.question.trim() : '';
+        return question || options.length ? { question, options } : null;
+    }
+
+    // Loads a file into the editor; nothing changes until "Yayınla".
+    $('btn-import').addEventListener('click', () => $('import-file').click());
+    $('import-file').addEventListener('change', async () => {
+        const file = $('import-file').files[0];
+        $('import-file').value = '';
+        if (!file) return;
+        const template = file.size <= 1024 * 1024 ? readTemplate(await file.text()) : null;
+        if (!template) {
+            $('import-status').textContent = 'Bu dosyada soru veya seçenek bulunamadı.';
+            return;
+        }
+        $('question').value = template.question;
+        $('options-list').replaceChildren();
+        template.options.forEach(opt => addOption(opt));
+        if (template.options.length < 2) addOption();
+        $('import-status').textContent = `${file.name} yüklendi. Kaydetmek için "Yayınla"ya basın.`;
+    });
+
+    // A new poll with this one's question and options (and no votes), opened
+    // in this tab; this poll stays in the home page list.
+    $('btn-duplicate').addEventListener('click', () => {
         if (!poll) return;
-        socket.emit('exportCsv', poll.code, (res) => {
-            if (res.error) return alert(res.error);
-            const url = URL.createObjectURL(new Blob([res.csv], { type: 'text/csv;charset=utf-8' }));
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `anket_${poll.code}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
+        socket.emit('createPoll', { template: { question: poll.question, options: poll.options } }, (res) => {
+            if (res.error) {
+                $('import-status').textContent = res.error;
+                return;
+            }
+            location.hash = res.secret;
         });
     });
 

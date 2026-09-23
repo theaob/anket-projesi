@@ -85,17 +85,22 @@
 
   // Countdown and open/closed state. When voting closes, results hidden with
   // H come back automatically: that is the moment to show them.
-  let votingOpen = null;
-  const votingTimer = VotingTimer.create(({ open, remainingMs, text }) => {
-    const timed = open && remainingMs !== null;
-    $('countdown').hidden = !timed;
-    $('countdown-text').textContent = text;
-    $('countdown').classList.toggle('urgent', timed && remainingMs <= 10000);
-    document.body.classList.toggle('voting-closed', !open);
-    $('join-title').textContent = open ? 'Katılmak için tarayın' : 'Oylama kapandı';
-    $('live').textContent = open ? 'Canlı' : 'Oylama kapandı';
-    if (votingOpen === true && !open && hidden) toggleHidden();
-    votingOpen = open;
+  // Before a scheduled start, the countdown counts to the start instead and
+  // people can already scan the code and wait on the poll page.
+  let lastPhase = null;
+  const votingTimer = VotingTimer.create(({ phase, remainingMs, startsInMs, text, opensAt }) => {
+    const open = phase === 'open';
+    const counting = (open && remainingMs !== null) || phase === 'scheduled';
+    $('countdown').hidden = !counting;
+    $('countdown-label').textContent = phase === 'scheduled' ? `Başlangıç ${VotingTimer.formatDate(opensAt)}` : 'Kalan süre';
+    $('countdown-text').textContent = phase === 'scheduled' && startsInMs === 0 ? 'Başlıyor…' : text;
+    $('countdown').classList.toggle('urgent', open && remainingMs !== null && remainingMs <= 10000);
+    document.body.classList.toggle('voting-closed', phase === 'closed');
+    document.body.classList.toggle('voting-scheduled', phase === 'scheduled');
+    $('join-title').textContent = { open: 'Katılmak için tarayın', scheduled: 'Oylama yakında başlıyor', closed: 'Oylama kapandı' }[phase];
+    $('live').textContent = { open: 'Canlı', scheduled: 'Başlamadı', closed: 'Oylama kapandı' }[phase];
+    if (lastPhase === 'open' && phase === 'closed' && hidden) toggleHidden();
+    lastPhase = phase;
   });
 
   function render(poll) {

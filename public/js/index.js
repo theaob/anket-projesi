@@ -295,7 +295,8 @@
   });
   let options = [];
   let voted = false;
-  let votingOpen = true;
+  // 'scheduled' (not started yet), 'open' or 'closed', as last reported.
+  let phase = 'open';
   let lastVotes = [];
   const liveEl = document.getElementById('poll-live');
   const srStatus = document.getElementById('sr-status');
@@ -314,18 +315,24 @@
   // Results are shown once this browser has voted, or to everyone once
   // voting has closed.
   function revealed() {
-    return voted || !votingOpen;
+    return voted || phase === 'closed';
   }
 
-  // Status next to the question: live (with the countdown when a timer is
-  // running) or closed. Closing when the countdown hits zero locally locks
-  // the options straight away instead of waiting for the server's message.
-  const votingTimer = VotingTimer.create(({ open, remainingMs, text }) => {
-    liveEl.classList.toggle('closed', !open);
-    liveEl.classList.toggle('urgent', open && remainingMs !== null && remainingMs <= 10000);
-    liveEl.textContent = !open ? 'Oylama kapandı' : text ? `Canlı · ${text}` : 'Canlı';
-    if (votingOpen && !open) {
-      votingOpen = false;
+  // Status next to the question: not started yet (with when, and a countdown
+  // to it), live (with the countdown to the end, if one is set) or closed.
+  // Closing when the countdown hits zero locally locks the options straight
+  // away instead of waiting for the server's message.
+  const votingTimer = VotingTimer.create(({ phase: now, remainingMs, startsInMs, text, opensAt, closesAt }) => {
+    poll.dataset.phase = now;
+    liveEl.classList.toggle('closed', now !== 'open');
+    liveEl.classList.toggle('urgent', now === 'open' && remainingMs !== null && remainingMs <= 10000);
+    if (now === 'closed') liveEl.textContent = 'Oylama kapandı';
+    else if (now === 'scheduled') {
+      liveEl.textContent = startsInMs > 0 ? `Başlangıç ${VotingTimer.formatDate(opensAt)} · ${text}` : 'Oylama başlıyor…';
+    } else if (!text) liveEl.textContent = 'Canlı';
+    else liveEl.textContent = remainingMs > 3600000 ? `Canlı · bitiş ${VotingTimer.formatDate(closesAt)}` : `Canlı · ${text}`;
+    if (phase === 'open' && now === 'closed') {
+      phase = 'closed';
       renderOptions(lastVotes);
       announce('Oylama kapandı. Sonuçlar gösteriliyor.');
     }
@@ -380,7 +387,7 @@
     buttons.forEach((btn, i) => {
       const count = votes[i] || 0;
       const pct = t ? Math.round((count / t) * 100) : 0;
-      btn.disabled = show;
+      btn.disabled = show || phase !== 'open';
       const fill = btn.querySelector('.fill');
       fill.style.setProperty('--bardelay', firstReveal ? (i * 0.08) + 's' : '0s');
       Motion.tweenNumber(btn.querySelector('.pct'), show ? pct : 0, (v) => v + '%');
@@ -445,7 +452,7 @@
   }
 
   function castVote(index) {
-    if (voted || !votingOpen || !currentCode) return;
+    if (voted || phase !== 'open' || !currentCode) return;
     voted = true;
     optsEl.querySelectorAll('.poll-opt').forEach((b) => { b.disabled = true; });
     socket.emit('castVote', { code: currentCode, index });
@@ -512,13 +519,15 @@
   socket.on('init', (data) => {
     // Voting closed by the owner (not by our own countdown reaching zero,
     // which announces itself): tell screen-reader users.
-    const closedNow = currentCode === data.code && votingOpen && !data.voting.open;
+    const next = data.voting.phase || (data.voting.open ? 'open' : 'closed');
+    const closedNow = currentCode === data.code && phase !== 'closed' && next === 'closed';
+    const openedNow = currentCode === data.code && phase === 'scheduled' && next === 'open';
     currentCode = data.code;
     options = data.options;
     // The server says whether this browser already voted in the current
     // round; if so, drop straight into the revealed, disabled results view.
     voted = data.voted;
-    votingOpen = data.voting.open;
+    phase = next;
     error.textContent = '';
     questionEl.textContent = data.question;
     renderOptions(data.votes || {});
@@ -534,6 +543,7 @@
       });
     }
     if (closedNow) announce('Oylama kapandı. Sonuçlar gösteriliyor.');
+    if (openedNow) announce('Oylama başladı.');
   });
 
   socket.on('updateVotes', (votes) => {
@@ -612,6 +622,33 @@
     createError.textContent = '';
     socket.emit('createPoll', (res) => {
       createBtn.disabled = false;
+      if (res.error) {
+        createError.textContent = res.error;
+        return;
+      }
+      location.href = '/manage#' + res.secret;
+    });
+  });
+
+  // A new poll from a JSON file: this app's export, or a plain
+  // { "question": "...", "options": [...] }. The server picks out the
+  // question and options and rejects anything else.
+  const importFile = document.getElementById('import-file');
+  document.getElementById('btn-import').addEventListener('click', () => importFile.click());
+  importFile.addEventListener('change', async () => {
+    const file = importFile.files[0];
+    importFile.value = '';
+    if (!file) return;
+    createError.textContent = '';
+    let template;
+    try {
+      if (file.size > 1024 * 1024) throw new Error('too big');
+      template = JSON.parse(await file.text());
+    } catch (e) {
+      createError.textContent = 'Bu dosya okunamadı; bir JSON anket dosyası seçin.';
+      return;
+    }
+    socket.emit('createPoll', { template }, (res) => {
       if (res.error) {
         createError.textContent = res.error;
         return;

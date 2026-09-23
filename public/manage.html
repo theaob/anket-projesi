@@ -168,6 +168,57 @@
             background: rgba(99, 102, 241, 0.2);
         }
 
+        .schedule {
+            margin-top: 16px;
+            padding: 14px;
+            border-radius: 16px;
+            background: rgba(99, 102, 241, 0.06);
+        }
+
+        .schedule-title {
+            margin: 0 0 8px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--primary-dark);
+        }
+
+        .schedule-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .schedule-row label {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .schedule-row input {
+            margin: 0;
+            min-width: 0;
+            font: inherit;
+            font-size: 0.9rem;
+            color: var(--text);
+        }
+
+        .schedule button {
+            margin: 4px 0 0;
+        }
+
+        .schedule .hint {
+            margin: 6px 0 4px;
+        }
+
+        @media (max-width: 420px) {
+            .schedule-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .btn-open {
             background: #047857;
         }
@@ -229,8 +280,52 @@
             background: #b45309;
         }
 
+        .export-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+
         .btn-export {
+            display: block;
+            box-sizing: border-box;
+            width: 100%;
+            margin: 0;
+            padding: 12px 14px;
+            border-radius: 14px;
             background: #047857;
+            color: #fff;
+            font: inherit;
+            font-weight: 700;
+            text-align: left;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .btn-export small {
+            display: block;
+            font-weight: 500;
+            font-size: 0.78rem;
+            opacity: 0.9;
+        }
+
+        .btn-export:focus-visible {
+            outline: 3px solid #7e22ce;
+            outline-offset: 2px;
+        }
+
+        .btn-export:disabled {
+            opacity: .6;
+            cursor: default;
+        }
+
+        .btn-secondary {
+            background: rgba(99, 102, 241, 0.12);
+            color: var(--primary-dark);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(99, 102, 241, 0.2);
         }
 
         .btn-delete {
@@ -312,19 +407,44 @@
                 <button type="button" id="btn-untimed">Süreyi kaldır (açık kalsın)</button>
             </div>
 
+            <form class="schedule" id="schedule-form" novalidate>
+                <p class="schedule-title">Tarih ve saatle planla</p>
+                <div class="schedule-row">
+                    <label>Başlangıç<input type="datetime-local" id="sched-start" aria-describedby="schedule-help"></label>
+                    <label>Bitiş<input type="datetime-local" id="sched-end" aria-describedby="schedule-help"></label>
+                </div>
+                <span class="hint" id="schedule-help">Başlangıç boşsa oylama hemen açılır; bitiş boşsa siz kapatana kadar açık kalır. Saatler bu cihazın saat dilimindedir.</span>
+                <button type="submit" id="btn-schedule">Planı kaydet</button>
+                <p class="hint" id="schedule-status" role="status"></p>
+            </form>
+
             <h2>Sonuçlar</h2>
             <div class="stats-row" id="stats"></div>
             <div id="results"></div>
+
+            <h2>Dışa aktar</h2>
+            <div class="export-grid">
+                <button type="button" class="btn-export" data-export="xlsx">Excel<small>Özet, grafikler, oy saatleri</small></button>
+                <a class="btn-export" id="report-link" target="_blank" rel="noopener">PDF raporu<small>Yazdırılabilir özet</small></a>
+                <button type="button" class="btn-export" data-export="csv">CSV<small>Düz tablo</small></button>
+                <button type="button" class="btn-export" data-export="json">JSON<small>Soru, seçenekler ve sonuçlar</small></button>
+            </div>
+            <p class="hint" id="export-status" role="status"></p>
 
             <h2>Düzenle</h2>
             <input type="text" id="question" placeholder="Soru nedir?" maxlength="200" aria-label="Soru">
             <div id="options-list"></div>
             <button type="button" class="btn-add" id="btn-add">+ Seçenek Ekle</button>
             <button type="button" id="btn-save">✔ Yayınla</button>
+            <div class="btn-row">
+                <button type="button" class="btn-secondary" id="btn-import">JSON'dan yükle</button>
+                <button type="button" class="btn-secondary" id="btn-duplicate">Kopyasını oluştur</button>
+            </div>
+            <input type="file" id="import-file" accept=".json,application/json" hidden>
+            <p class="hint" id="import-status" role="status"></p>
 
             <div class="btn-row">
                 <button type="button" class="btn-reset" id="btn-reset">Oyları Sıfırla</button>
-                <button type="button" class="btn-export" id="btn-export">Excel Al</button>
                 <button type="button" class="btn-delete" id="btn-delete">Anketi Sil</button>
             </div>
         </div>
