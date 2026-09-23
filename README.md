@@ -8,6 +8,7 @@ Kapalı ağlarda (Intranet) çalışmak üzere tasarlanmış, ultra profesyonel 
 
 * **💎 Premium UI:** Glassmorphism ve modern animasyonlarla donatılmış akıcı arayüz.
 * **📡 Canlı Sonuçlar:** Socket.io ile anlık grafik güncellemeleri.
+* **🖥 Sunum Ekranı:** Projeksiyon için tam ekran canlı sonuçlar; katılım QR kodu ve anket kodu ekranda.
 * **👥 Herkes Kendi Anketini Oluşturur:** Hesap gerekmez. Ana sayfadan anket oluşturan kişiye gizli bir yönetim bağlantısı verilir; anketi yalnızca bu bağlantıya sahip olanlar düzenleyebilir, sıfırlayabilir veya silebilir.
 * **🚀 GitHub Otomasyonu:** Versiyon kontrolü ve otomatik GitHub Release yayını.
 * **📊 Excel Export:** Sonuçları tek tıkla CSV/Excel formatında indirme.
@@ -26,6 +27,17 @@ Kapalı ağlarda (Intranet) çalışmak üzere tasarlanmış, ultra profesyonel 
 2. Soruyu ve seçenekleri girip **Yayınla**'ya basın.
 3. Katılımcılarla anket kodunu ya da katılım bağlantısını (`/?code=1234`) paylaşın. Kodlar 4 hanelidir; 4 haneli kodlar neredeyse tükendiğinde yeni anketlere 5 haneli kod verilir.
 4. Yönetim sayfasında sonuçları canlı izleyin; oyları sıfırlayın, Excel'e aktarın veya anketi silin.
+5. Salondaki ekran için yönetim sayfasındaki **"Sunum ekranını aç"** bağlantısını kullanın (`/present?code=1234`).
+
+### 🖥 Sunum Ekranı
+Soruyu, canlı sonuç çubuklarını, bağlı katılımcı sayısını ve katılım için bir QR kodu ile anket kodunu gösterir. Salt okunurdur ve ziyaret olarak sayılmaz; yönetim anahtarını içermediği için projeksiyonda güvenle gösterilebilir.
+
+* **F** — tam ekran, **H** — sonuçları gizle/göster (oylama bitene kadar katılımcıları etkilememek için).
+* Fare hareketsiz kaldığında düğmeler ve imleç gizlenir.
+* Seçenek sayısı arttıkça yazı boyutu küçülür, gerekirse seçenekler iki sütuna bölünür.
+* QR kodu sunucuda üretilir, internet bağlantısı gerekmez.
+
+QR kodundaki adres, sunum ekranının açıldığı adresten alınır; sayfa `localhost` üzerinden açıldıysa telefonların erişebilmesi için sunucunun ağ IP adresi kullanılır. Sunucuya bir alan adı veya ters vekil (reverse proxy) üzerinden erişiliyorsa adresi `PUBLIC_URL` ortam değişkeniyle belirleyin, örneğin `PUBLIC_URL=http://anket.firma.local`.
 
 **Yönetim bağlantısını saklayın:** anketi yönetmenin tek yolu budur ve kaybolursa geri alınamaz. Bağlantıya sahip olan herkes anketi yönetebilir, bu yüzden yalnızca birlikte yönettiğiniz kişilerle paylaşın. Aynı tarayıcıda oluşturduğunuz anketler ana sayfada "Bu tarayıcıda oluşturduğun anketler" altında listelenir. Sunucu, anahtarın yalnızca özetini (SHA-256) saklar.
 

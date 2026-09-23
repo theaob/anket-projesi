@@ -60,6 +60,18 @@
             margin-bottom: 16px;
         }
 
+        .present-link {
+            display: inline-block;
+            margin: 0 0 16px 12px;
+            vertical-align: top;
+            padding: 14px 18px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: #fff;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
         .link-row {
             display: flex;
             gap: 8px;
@@ -188,6 +200,7 @@
         <div id="editor" hidden>
             <h2>Anket Kodu</h2>
             <div class="code-badge" id="code"></div>
+            <a class="present-link" id="present-link" target="_blank" rel="noopener">🖥 Sunum ekranını aç</a>
 
             <p class="hint">Katılımcılar bu bağlantıyı açabilir ya da kodu ana sayfada girebilir:</p>
             <div class="link-row">

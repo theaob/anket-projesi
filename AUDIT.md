@@ -156,8 +156,8 @@ Socket.IO reconnects with a new socket that has no rooms. `index.html` only join
 - **Poll templates:** duplicate an existing poll, or import and export polls as JSON.
 
 ### Presenter experience
-- **Presenter / projector view:** a full-screen, large-type live results page (bar, pie or word cloud) for the room screen. The CHANGELOG shows a results page existed before 1.4.2.
-- **QR code and join link:** show `http://<host>/?code=1234` as a QR code in the admin and presenter views. Render it on the server so it also works offline.
+- ✅ **Presenter / projector view:** a full-screen, large-type live results page for the room screen. *Done: `/present?code=…`, with bars only; pie charts and word clouds are not built yet.*
+- ✅ **QR code and join link:** show `http://<host>/?code=1234` as a QR code in the presenter view, rendered on the server so it also works offline. *Done.*
 - **Open / close voting:** a start/stop toggle, an optional countdown timer, and "hide results until closed" to avoid bandwagon voting.
 - **Live participant count:** how many people are connected, plus a votes-per-minute sparkline.
 - **Keyboard shortcuts** for presenting: next question, show or hide results, and so on.

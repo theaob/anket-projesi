@@ -104,6 +104,7 @@
         $('editor').hidden = false;
         $('code').textContent = p.code;
         $('share-link').value = `${location.origin}/?code=${p.code}`;
+        $('present-link').href = `/present?code=${p.code}`;
         $('manage-link').value = location.href;
         document.title = `${p.code} · Anketi Yönet`;
         renderStats();

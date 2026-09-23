@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sunum Ekranı</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  :root {
+    --ink: #2a2840; --muted: #8a87a0; --line: #ece9f7; --track: #f1eff8;
+    --accent: #8b3fe0; --brand: linear-gradient(90deg, #ff7a2e, #ff3d5e, #a855f7, #5b52e8);
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink);
+    background: radial-gradient(circle at 30% 20%, #eef0ff 0%, #f7f7fb 45%, #eef1fb 100%);
+    overflow: hidden;
+  }
+  .blob { position: fixed; width: 50vmax; height: 50vmax; border-radius: 50%; filter: blur(90px); opacity: 0.35; z-index: 0; pointer-events: none; }
+  .blob-a { background: #a855f7; top: -20%; left: -15%; }
+  .blob-b { background: #ff7a2e; bottom: -25%; right: -15%; }
+
+  .stage {
+    position: relative; z-index: 1; height: 100%;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 30vw); gap: clamp(20px, 3vw, 48px);
+    padding: clamp(20px, 4vh, 56px) clamp(20px, 4vw, 64px);
+  }
+
+  /* ── Results ── */
+  .main { display: flex; flex-direction: column; min-height: 0; }
+  .question {
+    margin: 0 0 clamp(16px, 4vh, 44px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1;
+    font-size: clamp(28px, 4.6vw, 76px); overflow-wrap: anywhere;
+  }
+  /* --fit is lowered by present.js until every option fits on screen. */
+  .options { --fit: 1; flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: safe center;
+    gap: calc(clamp(10px, 2.2vh, 26px) * var(--fit)); }
+  .options.cols2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: safe center; column-gap: clamp(20px, 3vw, 48px); }
+  .opt { --size: calc(clamp(18px, 2.2vw, 38px) * var(--fit)); }
+  .opt-head { margin-bottom: calc(8px * var(--fit)); }
+  .opt-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; font-size: var(--size); font-weight: 700; }
+  .opt-label { overflow-wrap: anywhere; }
+  .opt-num { font-feature-settings: "tnum" 1; color: var(--accent); white-space: nowrap; }
+  .opt-num small { color: var(--muted); font-weight: 600; font-size: 0.6em; margin-left: 0.5em; }
+  .bar { height: calc(var(--size) * 0.75); border-radius: 999px; background: var(--track); overflow: hidden; }
+  .fill { height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #5b52e8, #a855f7);
+    transition: width .8s cubic-bezier(.2,.8,.2,1); }
+  .opt.lead .fill { background: var(--brand); }
+  .hidden-results .opt-num, .hidden-results .bar { display: none; }
+  .hidden-results .opt { padding: calc(var(--size) * 0.45) calc(var(--size) * 0.7); border-radius: 18px; background: rgba(255,255,255,.7); }
+  .empty { color: var(--muted); font-size: clamp(18px, 2vw, 32px); }
+
+  .footer { display: flex; gap: clamp(16px, 3vw, 40px); align-items: center; margin-top: clamp(14px, 3vh, 36px);
+    font-size: clamp(14px, 1.3vw, 22px); font-weight: 600; color: var(--muted); }
+  .footer strong { color: var(--ink); font-feature-settings: "tnum" 1; }
+  .live { display: inline-flex; align-items: center; gap: 8px; color: var(--accent); text-transform: uppercase; letter-spacing: .08em; font-size: .8em; }
+  .live::before { content: ""; width: .6em; height: .6em; border-radius: 50%; background: #ff3d5e; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform: scale(1.6); opacity: .5; } }
+  .bump { animation: bump .5s ease; display: inline-block; }
+  @keyframes bump { 40% { transform: scale(1.35); color: var(--accent); } }
+  .hidden-note { display: none; }
+  .hidden-results .hidden-note { display: inline; }
+
+  /* ── Join card ── */
+  .join {
+    align-self: center; background: #fff; border-radius: 28px; padding: clamp(18px, 2.4vw, 36px); text-align: center;
+    box-shadow: 0 30px 60px -20px rgba(60, 50, 130, 0.2), 0 4px 12px rgba(60, 50, 130, 0.06);
+  }
+  .join h2 { margin: 0 0 clamp(10px, 1.6vh, 18px); font-size: clamp(16px, 1.5vw, 26px); font-weight: 800; }
+  .qr { display: block; width: 100%; max-width: min(26vw, 58vh); aspect-ratio: 1; margin: 0 auto; image-rendering: pixelated; }
+  .url { margin: clamp(10px, 1.6vh, 18px) 0 0; font-size: clamp(13px, 1.1vw, 20px); font-weight: 600; color: var(--muted); overflow-wrap: anywhere; }
+  .or { margin: clamp(12px, 2vh, 22px) 0 4px; font-size: clamp(13px, 1vw, 18px); color: var(--muted); font-weight: 600; }
+  .code { font-weight: 900; font-size: clamp(40px, 5vw, 92px); letter-spacing: .12em; line-height: 1; font-feature-settings: "tnum" 1;
+    background: var(--brand); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+  /* ── Controls (fade out when the mouse is idle) ── */
+  .controls { position: fixed; top: 16px; right: 16px; z-index: 5; display: flex; gap: 8px; transition: opacity .4s ease; }
+  body.idle .controls { opacity: 0; pointer-events: none; }
+  body.idle { cursor: none; }
+  .controls button {
+    font: inherit; font-size: 14px; font-weight: 700; color: var(--ink); background: rgba(255,255,255,.85); border: 1px solid var(--line);
+    border-radius: 999px; padding: 8px 14px; cursor: pointer; backdrop-filter: blur(8px);
+  }
+  .controls button:hover { background: #fff; }
+  .controls button:focus-visible { outline: 3px solid #a855f7; outline-offset: 2px; }
+  .controls kbd { font: inherit; color: var(--muted); margin-left: 6px; }
+
+  .message { position: relative; z-index: 1; height: 100%; display: grid; place-items: center; text-align: center; padding: 24px;
+    font-size: clamp(20px, 2.4vw, 36px); font-weight: 700; color: var(--muted); }
+  .conn { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 5; background: #ff3d5e; color: #fff;
+    padding: 8px 16px; border-radius: 999px; font-size: 14px; font-weight: 600; }
+
+  @media (max-width: 900px), (orientation: portrait) {
+    body { overflow: auto; }
+    .stage { grid-template-columns: 1fr; height: auto; min-height: 100%; }
+    .options.cols2 { grid-template-columns: 1fr; }
+    .join { order: -1; display: grid; grid-template-columns: auto 1fr; gap: 4px 20px; align-items: center; text-align: left; }
+    .join h2 { grid-column: 1 / -1; }
+    .qr { grid-row: span 3; width: min(36vw, 200px); }
+    .url, .or { margin: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fill { transition: none; } .live::before, .bump { animation: none; }
+  }
+</style>
+</head>
+<body>
+<div class="blob blob-a"></div>
+<div class="blob blob-b"></div>
+
+<div class="controls" id="controls">
+  <button type="button" id="btn-hide">Sonuçları gizle<kbd>H</kbd></button>
+  <button type="button" id="btn-full">Tam ekran<kbd>F</kbd></button>
+</div>
+
+<div class="message" id="message" hidden></div>
+
+<main class="stage" id="stage" hidden>
+  <section class="main" aria-live="polite">
+    <h1 class="question" id="question"></h1>
+    <div class="options" id="options"></div>
+    <div class="footer">
+      <span class="live">Canlı</span>
+      <span><strong id="votes">0</strong> oy</span>
+      <span><strong id="participants">0</strong> katılımcı bağlı</span>
+      <span class="hidden-note">Sonuçlar gizli</span>
+    </div>
+  </section>
+
+  <aside class="join">
+    <h2>Katılmak için tarayın</h2>
+    <img class="qr" id="qr" alt="Ankete katılım QR kodu" />
+    <p class="url" id="join-url"></p>
+    <p class="or">veya kodu girin</p>
+    <div class="code" id="code"></div>
+  </aside>
+</main>
+
+<p class="conn" id="conn" role="status" hidden>Bağlantı koptu, yeniden bağlanılıyor…</p>
+
+<script src="/js/present.js"></script>
+</body>
+</html>

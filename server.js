@@ -4,6 +4,7 @@ const { Server } = require('socket.io');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const QRCode = require('qrcode');
 const { openDatabase } = require('./db');
 
 const app = express();
@@ -38,6 +39,23 @@ app.get('/admin.html', (req, res) => res.redirect('/'));
 app.get('/manage', (req, res) => res.sendFile(path.join(__dirname, 'public', 'manage.html'), {
     headers: { 'Cache-Control': 'no-cache' }
 }));
+app.get('/present', (req, res) => res.sendFile(path.join(__dirname, 'public', 'present.html'), {
+    headers: { 'Cache-Control': 'no-cache' }
+}));
+
+// QR code for a poll's join link, drawn on the server so it works without
+// internet access.
+app.get('/qr/:code.svg', (req, res) => {
+    const { code } = req.params;
+    if (!POLL_CODE_RE.test(code) || !polls.has(code)) return res.status(404).end();
+    QRCode.toString(joinUrl(req.get('host'), code), { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })
+        .then(svg => {
+            res.set('Content-Type', 'image/svg+xml');
+            res.set('Cache-Control', 'no-cache');
+            res.send(svg);
+        })
+        .catch(() => res.status(500).end());
+});
 
 app.use(express.static('public', {
     setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache')
@@ -141,8 +159,22 @@ function voterView(poll, voterId) {
     };
 }
 
+// What a presenter screen shows: the same results voters see after voting,
+// plus how many voters are connected right now.
+function publicView(poll) {
+    return {
+        code: poll.code,
+        question: poll.question,
+        options: poll.options,
+        votes: poll.votes,
+        participants: poll.active.size
+    };
+}
+
+// Pushes a poll's latest state to its managers and presenter screens.
 function notifyOwners(poll) {
     io.to(`manage:${poll.code}`).emit('managePoll', ownerView(poll));
+    io.to(`watch:${poll.code}`).emit('watchPoll', publicView(poll));
 }
 
 // Every voter gets their own `voted` flag, so a plain room broadcast won't do.
@@ -218,6 +250,20 @@ const getLocalIp = () => {
 
 const localIp = getLocalIp();
 const PORT = 3000;
+// Base address put in join links and QR codes. Set PUBLIC_URL when the
+// server is reached through a proxy or a DNS name (e.g. http://anket.firma.local).
+const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
+
+// The join link for a poll, as seen from the browser that asked. A presenter
+// who opened the page as "localhost" would otherwise put a link on screen
+// that no phone in the room can reach, so loopback hosts become the LAN IP.
+function joinUrl(host, code) {
+    if (PUBLIC_URL) return `${PUBLIC_URL}/?code=${code}`;
+    const valid = typeof host === 'string' && /^[A-Za-z0-9.\-]+(:\d+)?$|^\[[0-9A-Fa-f:.]+\](:\d+)?$/.test(host);
+    const loopback = !valid || /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?$/.test(host);
+    const origin = loopback ? `${localIp}:${host?.match(/:(\d+)$/)?.[1] || PORT}` : host;
+    return `http://${origin}/?code=${code}`;
+}
 
 io.on('connection', (socket) => {
     // Voters identify themselves with a random per-browser ID so the server,
@@ -295,6 +341,8 @@ io.on('connection', (socket) => {
         io.in(`poll:${code}`).socketsLeave(`poll:${code}`);
         io.to(`manage:${code}`).emit('pollDeleted', code);
         io.in(`manage:${code}`).socketsLeave(`manage:${code}`);
+        io.to(`watch:${code}`).emit('pollDeleted', code);
+        io.in(`watch:${code}`).socketsLeave(`watch:${code}`);
     });
 
     on('resetVotes', (code) => {
@@ -315,6 +363,15 @@ io.on('connection', (socket) => {
     on('exportCsv', (code, ack) => {
         const poll = ownedPoll(code);
         reply(ack, poll ? { csv: buildCsv(poll) } : { error: 'Anket bulunamadı.' });
+    });
+
+    // ── Presenter screen ───────────────────────────────────────
+    // Read-only and does not count as a visit.
+    on('watchPoll', (code, ack) => {
+        const poll = typeof code === 'string' && POLL_CODE_RE.test(code) ? polls.get(code) : null;
+        if (!poll) return reply(ack, { error: 'Geçersiz anket kodu.' });
+        socket.join(`watch:${code}`);
+        reply(ack, { poll: publicView(poll), joinUrl: joinUrl(socket.handshake.headers.host, code) });
     });
 
     // ── Voter events ───────────────────────────────────────────
