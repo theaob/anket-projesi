@@ -13,7 +13,8 @@ Toplantı, ders ve etkinlikler için canlı anket uygulaması. Kapalı ağda (in
 * **🖥 Sunum Ekranı:** Projeksiyon için tam ekran canlı sonuçlar; katılım QR kodu ve anket kodu ekranda.
 * **👥 Herkes Kendi Anketini Oluşturur:** Hesap gerekmez. Ana sayfadan anket oluşturan kişiye gizli bir yönetim bağlantısı verilir; anketi yalnızca bu bağlantıya sahip olanlar düzenleyebilir, sıfırlayabilir veya silebilir.
 * **🚀 GitHub Otomasyonu:** Versiyon kontrolü ve otomatik GitHub Release yayını.
-* **📊 Excel Export:** Sonuçları tek tıkla CSV/Excel formatında indirme.
+* **📊 Dışa aktarma:** Excel (özet, grafikler, oy saatleri, zaman çizelgesi), yazdırılabilir PDF raporu, CSV ve JSON.
+* **📥 JSON içe aktarma ve kopyalama:** Dışa aktarılan JSON dosyasından (veya `{ "question": "...", "options": [...] }`) yeni anket oluşturma; bir anketin kopyasını oluşturma.
 * **🔒 Kapalı Ağ Uyumu:** Kapalı ağda internet bağlantısı gerekmez (isteğe bağlı Cloudflare Turnstile dışında hiçbir dış servis kullanılmaz).
 * **🌐 İnternette Yayın:** İmzalı katılımcı çerezleri, ağ başına hız sınırları ve isteğe bağlı bot doğrulamasıyla toplu oy kullanmaya karşı koruma.
 * **🐳 Docker Ready:** Tek komutla her ortamda tutarlı kurulum.
@@ -34,7 +35,7 @@ Toplantı, ders ve etkinlikler için canlı anket uygulaması. Kapalı ağda (in
 1. Ana sayfada **"Yeni anket oluştur"** düğmesine basın. Anketin yönetim sayfasına (`/manage#<gizli-anahtar>`) yönlendirilirsiniz.
 2. Soruyu ve seçenekleri girip **Yayınla**'ya basın.
 3. Katılımcılarla anket kodunu ya da katılım bağlantısını (`/?code=1234`) paylaşın. Kodlar 4 hanelidir; 4 haneli kodlar neredeyse tükendiğinde yeni anketlere 5 haneli kod verilir.
-4. Yönetim sayfasında sonuçları canlı izleyin; oyları sıfırlayın, Excel'e aktarın veya anketi silin.
+4. Yönetim sayfasında sonuçları canlı izleyin; oyları sıfırlayın, sonuçları Excel/PDF/CSV/JSON olarak dışa aktarın, anketi kopyalayın veya silin. Ana sayfadaki "JSON dosyasından içe aktar" ile kayıtlı bir anketten yeni anket oluşturabilirsiniz.
 5. **Oylama** bölümünden oylamayı kapatıp açabilir ya da süreli başlatabilirsiniz (30 sn, 1, 2 veya 5 dk; süre işlerken "+30 sn" ile uzatılabilir). Süre dolunca oylama otomatik kapanır, kapalı ankette oy verilemez ve sonuçlar tüm katılımcılara gösterilir. Yeni anketler açık olarak başlar; zamanlayıcı sunucu yeniden başlatılsa da kaldığı yerden devam eder.
 6. Salondaki ekran için yönetim sayfasındaki **"Sunum ekranını aç"** bağlantısını kullanın (`/present?code=1234`).
 

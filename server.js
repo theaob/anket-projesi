@@ -9,6 +9,7 @@ const proxyaddr = require('proxy-addr');
 const { openDatabase } = require('./db');
 const { createIdentity, verifyTurnstile } = require('./identity');
 const { clientKey, createLimiter: createLimiter_ } = require('./rate-limit');
+const exporter = require('./export');
 
 // ── Configuration (environment variables, see README) ──────────
 const envInt = (name, fallback) => {
@@ -119,6 +120,9 @@ app.get('/manage', (req, res) => res.sendFile(path.join(__dirname, 'public', 'ma
     headers: { 'Cache-Control': 'no-cache' }
 }));
 app.get('/present', (req, res) => res.sendFile(path.join(__dirname, 'public', 'present.html'), {
+    headers: { 'Cache-Control': 'no-cache' }
+}));
+app.get('/report', (req, res) => res.sendFile(path.join(__dirname, 'public', 'report.html'), {
     headers: { 'Cache-Control': 'no-cache' }
 }));
 
@@ -400,6 +404,17 @@ function cleanText(value) {
     return typeof value === 'string' ? value.trim().slice(0, MAX_TEXT) : '';
 }
 
+// Question and options for a new poll, from an imported JSON file (our own
+// export, or a bare { question, options }) or a poll being duplicated.
+// Returns null if there is nothing usable.
+function pollTemplate(value) {
+    const source = value?.poll && typeof value.poll === 'object' ? value.poll : value;
+    if (!source || typeof source !== 'object' || !Array.isArray(source.options)) return null;
+    const options = source.options.slice(0, MAX_OPTIONS * 5).map(cleanText).filter(Boolean).slice(0, MAX_OPTIONS);
+    const question = cleanText(source.question);
+    return question || options.length ? { question: question || 'Yeni Anket', options } : null;
+}
+
 function sameOptions(a, b) {
     return a.length === b.length && a.every((opt, i) => opt === b[i]);
 }
@@ -426,27 +441,6 @@ function leavePoll(socket) {
     }
     return poll;
 }
-
-// A quoted CSV cell. Text starting with = + - @ (or a tab/carriage return) is
-// prefixed with an apostrophe so spreadsheets show it instead of running it
-// as a formula; option text is written by whoever created the poll.
-function csvCell(value) {
-    let text = String(value);
-    if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
-    return `"${text.replace(/"/g, '""')}"`;
-}
-
-function buildCsv(poll) {
-    let csvContent = "\uFEFF";
-    csvContent += "Secenek,Oy Sayisi\n";
-    poll.options.forEach((opt, i) => {
-        csvContent += `${csvCell(opt)},${poll.votes[i] || 0}\n`;
-    });
-    csvContent += `\nZiyaret,${poll.visitors.size}\n`;
-    csvContent += `Oy Vermeden Ayrilan,${abandonedCount(poll)}\n`;
-    return csvContent;
-}
-
 
 const getLocalIp = () => {
     const interfaces = os.networkInterfaces();
@@ -510,16 +504,28 @@ io.on('connection', (socket) => {
     const ownedPoll = (code) => (socket.data.owned.has(code) ? polls.get(code) : null);
 
     // ── Owner events ───────────────────────────────────────────
-    on('createPoll', (ack) => {
+    // createPoll(ack) makes an empty poll; createPoll({ template }, ack)
+    // starts it with a question and options (JSON import, duplicating).
+    on('createPoll', (...args) => {
+        const ack = args[args.length - 1];
+        const payload = args.length > 1 ? args[0] : null;
+        let template = null;
+        if (payload?.template !== undefined) {
+            template = pollTemplate(payload.template);
+            if (!template) return reply(ack, { error: 'Dosyada soru veya seçenek bulunamadı.' });
+        }
         if (!createLimiter.take(clientKey(socket.data.ip)).ok) {
             return reply(ack, { error: 'Çok fazla anket oluşturuldu, lütfen daha sonra tekrar deneyin.' });
         }
         const code = generateCode();
         if (!code) return reply(ack, { error: 'Şu anda boş anket kodu yok, lütfen daha sonra tekrar deneyin.' });
         const secret = crypto.randomBytes(24).toString('base64url');
-        db.createPoll(code, 'Yeni Anket', hashSecret(secret));
+        const question = template?.question ?? 'Yeni Anket';
+        const options = template?.options ?? [];
+        db.createPoll(code, question, hashSecret(secret));
+        if (options.length) db.updatePoll(code, question, options);
         polls.set(code, {
-            code, question: 'Yeni Anket', options: [], votes: [], visitors: new Map(),
+            code, question, options, votes: options.map(() => 0), visitors: new Map(),
             closed: false, closesAt: null, active: new Map(), timer: null
         });
         reply(ack, { code, secret });
@@ -604,9 +610,20 @@ io.on('connection', (socket) => {
 
     // Returned over the socket rather than from a URL so the manage secret
     // never has to appear in a link or a server log.
-    on('exportCsv', (code, ack) => {
-        const poll = ownedPoll(code);
-        reply(ack, poll ? { csv: buildCsv(poll) } : { error: 'Anket bulunamadı.' });
+    // Results as a file ({ filename, mime, data }) in the requested format,
+    // or, for 'report', the data the printable report page draws.
+    on('exportPoll', (payload, ack) => {
+        const poll = ownedPoll(payload?.code);
+        const format = Object.hasOwn(exporter.FORMATS, payload?.format) ? exporter.FORMATS[payload.format] : null;
+        if (!poll || !format) return reply(ack, { error: 'Anket bulunamadı.' });
+        const tz = Number.isInteger(payload.tzOffset) && Math.abs(payload.tzOffset) <= 14 * 60 ? payload.tzOffset : 0;
+        const voting = votingView(poll);
+        const report = exporter.buildReport(poll, db.exportDetails(poll.code), {
+            abandoned: abandonedCount(poll),
+            connected: poll.active.size,
+            voting: { open: voting.open, closesAt: voting.open ? poll.closesAt : null }
+        }, tz);
+        reply(ack, format(report));
     });
 
     // ── Presenter screen ───────────────────────────────────────

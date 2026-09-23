@@ -95,6 +95,8 @@ function openDatabase(dataDir) {
         deleteVisitor: db.prepare('DELETE FROM visitors WHERE poll_code = ? AND voter_id = ?'),
         insertVote: db.prepare('INSERT OR IGNORE INTO votes (poll_code, voter_id, position) VALUES (?, ?, ?)'),
         deleteVotes: db.prepare('DELETE FROM votes WHERE poll_code = ?'),
+        pollCreatedAt: db.prepare('SELECT created_at FROM polls WHERE code = ?'),
+        voteTimes: db.prepare('SELECT position, created_at FROM votes WHERE poll_code = ? ORDER BY created_at, rowid'),
         allPolls: db.prepare('SELECT code, question, closed, closes_at FROM polls ORDER BY created_at, code'),
         allOptions: db.prepare('SELECT poll_code, position, text FROM options ORDER BY poll_code, position'),
         allVisitors: db.prepare(`
@@ -176,6 +178,16 @@ function openDatabase(dataDir) {
             });
         },
 
+        // When the poll was created and when each current vote was cast, as ms
+        // since the epoch, for exports. Votes are { option, at }, oldest first.
+        exportDetails(code) {
+            const created = stmt.pollCreatedAt.get(code);
+            return {
+                createdAt: created ? sqliteTime(created.created_at) : null,
+                votes: stmt.voteTimes.all(code).map(v => ({ option: v.position, at: sqliteTime(v.created_at) }))
+            };
+        },
+
         // Returns the stored setting, first storing `create()` if it is missing.
         getOrCreateSetting(key, create) {
             const row = stmt.getSetting.get(key);
@@ -188,6 +200,11 @@ function openDatabase(dataDir) {
             db.close();
         },
     };
+}
+
+// SQLite's datetime('now') is UTC text, 'YYYY-MM-DD HH:MM:SS'.
+function sqliteTime(text) {
+    return Date.parse(text.replace(' ', 'T') + 'Z');
 }
 
 function transaction(db, fn) {

@@ -620,6 +620,33 @@
     });
   });
 
+  // A new poll from a JSON file: this app's export, or a plain
+  // { "question": "...", "options": [...] }. The server picks out the
+  // question and options and rejects anything else.
+  const importFile = document.getElementById('import-file');
+  document.getElementById('btn-import').addEventListener('click', () => importFile.click());
+  importFile.addEventListener('change', async () => {
+    const file = importFile.files[0];
+    importFile.value = '';
+    if (!file) return;
+    createError.textContent = '';
+    let template;
+    try {
+      if (file.size > 1024 * 1024) throw new Error('too big');
+      template = JSON.parse(await file.text());
+    } catch (e) {
+      createError.textContent = 'Bu dosya okunamadı; bir JSON anket dosyası seçin.';
+      return;
+    }
+    socket.emit('createPoll', { template }, (res) => {
+      if (res.error) {
+        createError.textContent = res.error;
+        return;
+      }
+      location.href = '/manage#' + res.secret;
+    });
+  });
+
   const urlParams = new URLSearchParams(location.search);
   const urlCode = urlParams.get('code');
   if (urlCode) {

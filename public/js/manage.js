@@ -149,6 +149,7 @@
         $('code').textContent = p.code;
         $('share-link').value = `${location.origin}/?code=${p.code}`;
         $('present-link').href = `/present?code=${p.code}`;
+        $('report-link').href = `/report#${secret}`;
         $('manage-link').value = location.href;
         document.title = `${p.code} · Anketi Yönet`;
         renderStats();
@@ -222,18 +223,80 @@
         }
     });
 
-    $('btn-export').addEventListener('click', () => {
+    // ── Export ──────────────────────────────────────────────
+    // The server builds the file; times in it are written in this device's
+    // time zone.
+    function download(filename, mime, data) {
+        const url = URL.createObjectURL(new Blob([data], { type: mime }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    document.querySelectorAll('[data-export]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            if (!poll) return;
+            btn.disabled = true;
+            $('export-status').textContent = 'Hazırlanıyor…';
+            socket.timeout(15000).emit('exportPoll',
+                { code: poll.code, format: btn.dataset.export, tzOffset: new Date().getTimezoneOffset() },
+                (err, res) => {
+                    btn.disabled = false;
+                    if (err || res.error) {
+                        $('export-status').textContent = res?.error || 'Dışa aktarılamadı, lütfen tekrar deneyin.';
+                        return;
+                    }
+                    download(res.filename, res.mime, res.data);
+                    $('export-status').textContent = `${res.filename} indirildi.`;
+                });
+        });
+    });
+
+    // ── Import and duplicate ─────────────────────────────────
+    // Question and options from a JSON file: this app's export, or a plain
+    // { "question": "...", "options": ["...", ...] }. Returns null if unusable.
+    function readTemplate(text) {
+        let data;
+        try { data = JSON.parse(text); } catch (e) { return null; }
+        const source = data && typeof data.poll === 'object' && data.poll ? data.poll : data;
+        if (!source || !Array.isArray(source.options)) return null;
+        const options = source.options.filter(o => typeof o === 'string' && o.trim()).map(o => o.trim());
+        const question = typeof source.question === 'string' ? source.question.trim() : '';
+        return question || options.length ? { question, options } : null;
+    }
+
+    // Loads a file into the editor; nothing changes until "Yayınla".
+    $('btn-import').addEventListener('click', () => $('import-file').click());
+    $('import-file').addEventListener('change', async () => {
+        const file = $('import-file').files[0];
+        $('import-file').value = '';
+        if (!file) return;
+        const template = file.size <= 1024 * 1024 ? readTemplate(await file.text()) : null;
+        if (!template) {
+            $('import-status').textContent = 'Bu dosyada soru veya seçenek bulunamadı.';
+            return;
+        }
+        $('question').value = template.question;
+        $('options-list').replaceChildren();
+        template.options.forEach(opt => addOption(opt));
+        if (template.options.length < 2) addOption();
+        $('import-status').textContent = `${file.name} yüklendi. Kaydetmek için "Yayınla"ya basın.`;
+    });
+
+    // A new poll with this one's question and options (and no votes), opened
+    // in this tab; this poll stays in the home page list.
+    $('btn-duplicate').addEventListener('click', () => {
         if (!poll) return;
-        socket.emit('exportCsv', poll.code, (res) => {
-            if (res.error) return alert(res.error);
-            const url = URL.createObjectURL(new Blob([res.csv], { type: 'text/csv;charset=utf-8' }));
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `anket_${poll.code}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
+        socket.emit('createPoll', { template: { question: poll.question, options: poll.options } }, (res) => {
+            if (res.error) {
+                $('import-status').textContent = res.error;
+                return;
+            }
+            location.hash = res.secret;
         });
     });
 
