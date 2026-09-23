@@ -5,6 +5,8 @@ ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-23
+
 ### Güvenlik
 - **CSV formül enjeksiyonu**: Dışa aktarılan dosyada `=`, `+`, `-` veya `@` ile başlayan seçenek metinleri artık başına `'` eklenerek yazılıyor; Excel bunları formül olarak çalıştırmıyor.
 - **Docker imajı yetkisiz kullanıcıyla çalışıyor**: Sunucu artık `root` yerine `node` kullanıcısıyla çalışıyor. v2.0.0 ile oluşturulmuş veri volume'lerinin sahipliği açılışta otomatik olarak düzeltiliyor.
