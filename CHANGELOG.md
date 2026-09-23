@@ -18,6 +18,10 @@ ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 - **`PORT` ortam değişkeni** (varsayılan `3000`).
 
 ### Değiştirildi
+- **Daha akıcı animasyonlar**: Sonuç çubukları her canlı güncellemede sıfırdan yeniden çizilmek yerine (oy ekranında her oyda %0'a düşüp yeniden büyüyordu) eski değerden yenisine kayarak ilerliyor; yüzdeler, oy sayıları ve istatistikler yeni değere sayarak ulaşıyor (oy ekranı, yönetim sayfası ve sunum ekranı). Yönetim sayfasındaki çubuklar artık hedefi aşıp geri dönmüyor; sunum ekranında öndeki seçeneğin rengi yumuşak geçişle değişiyor.
+- **Okunabilir başlık animasyonu**: "Ankete Katıl" harfleri sürekli dönmek yerine hafifçe dalgalanıyor ve birkaç saniyede bir harfler sırayla dönüyor; başlık zamanın büyük kısmında (önceden hiç) tam okunabiliyor.
+- Kod girişinden ankete geçiş (ve anket silinince geri dönüş) destekleyen tarayıcılarda yumuşak geçişle yapılıyor.
+- İşletim sistemindeki "hareketi azalt" ayarı tüm sayfalarda tüm efektler için uygulanıyor (oy kutlaması, çubuk geçişleri, sayı animasyonları, hane kutuları, arka plan).
 - Ana sayfadaki başlık animasyonu yalnızca görünürken çalışıyor: bir ankete katılınca veya başlık ekrandan kaydırılınca duruyor (telefonlarda pil tasarrufu).
 - README güncellendi: yeni başlık ve açıklama (kapalı ağ ve internet kullanımı), CI rozeti, sürüm çıkarma adımları.
 - `package.json`: paket adı `anket-projesi` oldu ve `"private": true` eklendi.

@@ -47,7 +47,11 @@
   .bar { height: calc(var(--size) * 0.75); border-radius: 999px; background: var(--track); overflow: hidden; }
   .fill { height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #5b52e8, #a855f7);
     transition: width .8s cubic-bezier(.2,.8,.2,1); }
-  .opt.lead .fill { background: var(--brand); }
+  /* The leading option's bar fades into the brand gradient. */
+  .fill::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--brand);
+    opacity: 0; transition: opacity .6s ease; }
+  .fill { position: relative; }
+  .opt.lead .fill::after { opacity: 1; }
   .hidden-results .opt-num, .hidden-results .bar { display: none; }
   .hidden-results .opt { padding: calc(var(--size) * 0.45) calc(var(--size) * 0.7); border-radius: 18px; background: rgba(255,255,255,.7); }
   .empty { color: var(--muted); font-size: clamp(18px, 2vw, 32px); }
@@ -115,7 +119,7 @@
     .url, .or { margin: 0; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .fill { transition: none; } .live::before, .bump, .countdown.urgent { animation: none; }
+    .fill, .fill::after, .controls { transition: none; } .live::before, .bump, .countdown.urgent { animation: none; }
   }
 </style>
 </head>
@@ -154,6 +158,7 @@
 
 <p class="conn" id="conn" role="status" hidden>Bağlantı koptu, yeniden bağlanılıyor…</p>
 
+<script src="/js/motion.js"></script>
 <script src="/js/voting-timer.js"></script>
 <script src="/js/present.js"></script>
 </body>

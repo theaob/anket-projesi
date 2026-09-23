@@ -29,48 +29,72 @@
         return p.votes.reduce((a, b) => a + b, 0);
     }
 
+    const formatInt = (v) => v.toLocaleString('tr-TR');
+
+    // Stats and results are built once and then updated in place, so numbers
+    // count to their new value and bars glide instead of being redrawn.
+    let statEls = null;
     function renderStats() {
-        const stats = $('stats');
-        stats.replaceChildren();
-        [['👁 Ziyaret', poll.visits], ['✔ Oy', totalVotes(poll)], ['✗ Oy vermeden ayrılan', poll.abandoned]]
-            .forEach(([label, value]) => {
+        if (!statEls) {
+            statEls = [['👁 Ziyaret'], ['✔ Oy'], ['✗ Oy vermeden ayrılan']].map(([label]) => {
                 const span = document.createElement('span');
                 const strong = document.createElement('strong');
-                strong.textContent = value;
                 span.append(label + ': ', strong);
-                stats.appendChild(span);
+                $('stats').appendChild(span);
+                return strong;
             });
+        }
+        [poll.visits, totalVotes(poll), poll.abandoned]
+            .forEach((value, i) => Motion.tweenNumber(statEls[i], value, formatInt));
     }
 
+    let resultLabels = null;
+    let resultRows = [];
     function renderResults() {
         const results = $('results');
-        results.replaceChildren();
-        if (poll.options.length === 0) {
-            const p = document.createElement('p');
-            p.className = 'empty-state';
-            p.textContent = 'Henüz seçenek yok. Aşağıdan soru ve seçenekleri ekleyip yayınlayın.';
-            results.appendChild(p);
-            return;
+        const changed = !resultLabels || resultLabels.length !== poll.options.length
+            || resultLabels.some((label, i) => label !== poll.options[i]);
+        if (changed) {
+            resultLabels = poll.options.slice();
+            if (poll.options.length === 0) {
+                const p = document.createElement('p');
+                p.className = 'empty-state';
+                p.textContent = 'Henüz seçenek yok. Aşağıdan soru ve seçenekleri ekleyip yayınlayın.';
+                results.replaceChildren(p);
+                resultRows = [];
+                return;
+            }
+            resultRows = poll.options.map((label) => {
+                const row = document.createElement('div');
+                row.className = 'label-row';
+                const name = document.createElement('span');
+                name.textContent = label;
+                const value = document.createElement('span');
+                const count = document.createElement('span');
+                const pct = document.createElement('span');
+                Motion.setNumber(count, 0, formatInt);
+                Motion.setNumber(pct, 0, (v) => '%' + v);
+                value.append(count, ' oy · ', pct);
+                row.append(name, value);
+                const bar = document.createElement('div');
+                bar.className = 'bar-container';
+                const fill = document.createElement('div');
+                fill.className = 'bar';
+                bar.appendChild(fill);
+                return { elements: [row, bar], count, pct, fill };
+            });
+            results.replaceChildren(...resultRows.flatMap((r) => r.elements));
         }
         const total = totalVotes(poll);
-        poll.options.forEach((label, i) => {
+        // New rows paint at 0% first, so their bars grow in.
+        const apply = () => resultRows.forEach((r, i) => {
             const count = poll.votes[i] || 0;
             const pct = total ? Math.round(count / total * 100) : 0;
-            const row = document.createElement('div');
-            row.className = 'label-row';
-            const name = document.createElement('span');
-            name.textContent = label;
-            const value = document.createElement('span');
-            value.textContent = `${count} oy · %${pct}`;
-            row.append(name, value);
-            const bar = document.createElement('div');
-            bar.className = 'bar-container';
-            const fill = document.createElement('div');
-            fill.className = 'bar';
-            fill.style.width = pct + '%';
-            bar.appendChild(fill);
-            results.append(row, bar);
+            Motion.tweenNumber(r.count, count, formatInt);
+            Motion.tweenNumber(r.pct, pct, (v) => '%' + v);
+            r.fill.style.width = pct + '%';
         });
+        if (changed) requestAnimationFrame(apply); else apply();
     }
 
     function addOption(text = '') {
