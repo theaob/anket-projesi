@@ -11,7 +11,7 @@
     margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
     padding: 24px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     background: radial-gradient(circle at 30% 20%, #eef0ff 0%, #f7f7fb 45%, #eef1fb 100%);
-    position: relative; overflow: hidden;
+    position: relative; overflow-x: hidden;
   }
   .blob { position: fixed; width: 46vmax; height: 46vmax; max-width: 640px; max-height: 640px; border-radius: 50%;
     filter: blur(70px); opacity: 0.5; z-index: 0; animation: blobMove 5s ease-in-out infinite; pointer-events: none; }
@@ -86,6 +86,23 @@
   .poll[data-voted] .fill, .poll[data-voted] .pct { display: revert; }
   .poll-foot { margin: 14px 0 0; font-size: 13px; font-weight: 600; color: #a3a1b3; }
   .conn { margin: 16px 0 0; font-size: 13px; font-weight: 600; color: #ff3d5e; }
+
+  .create { margin-top: 28px; padding-top: 24px; border-top: 2px dashed #ece9f7; }
+  .btn-create {
+    width: 100%; border: 2px solid #d9d2fb; border-radius: 18px; padding: 14px; font: inherit; font-weight: 700; font-size: 16px;
+    color: #5b52e8; background: #fff; cursor: pointer; transition: background .2s ease, transform .2s ease;
+  }
+  .btn-create:hover { background: #f5f2ff; transform: translateY(-1px); }
+  .btn-create:focus-visible { outline: 3px solid #a855f7; outline-offset: 2px; }
+  .btn-create:disabled { opacity: .6; cursor: default; transform: none; }
+  .my-polls { margin-top: 18px; text-align: left; }
+  .my-polls h2 { margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #a3a1b3; }
+  .my-polls ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 232px; overflow-y: auto; }
+  .my-polls a { display: flex; gap: 12px; align-items: baseline; padding: 10px 14px; border-radius: 12px; background: #f4f3f9;
+    color: #38364a; text-decoration: none; font-weight: 600; font-size: 14px; }
+  .my-polls a:hover { background: #ede8ff; }
+  .my-polls .code { color: #8b3fe0; font-feature-settings: "tnum" 1; letter-spacing: 0.1em; }
+  .my-polls .q { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -106,6 +123,15 @@
     </div>
     <p class="error" id="join-error" role="alert"></p>
     <button type="submit" class="btn-join">Katıl</button>
+
+    <div class="create">
+      <button type="button" class="btn-create" id="btn-create">+ Yeni anket oluştur</button>
+      <p class="error" id="create-error" role="alert"></p>
+      <div class="my-polls" id="my-polls" hidden>
+        <h2>Bu tarayıcıda oluşturduğun anketler</h2>
+        <ul id="my-polls-list"></ul>
+      </div>
+    </div>
   </form>
 
   <div class="poll" id="poll" aria-live="polite">
@@ -289,12 +315,30 @@
   // CSS width transition actually has something to animate from.
   function renderOptions(votes) {
     const t = totalVotes(votes);
-    optsEl.innerHTML = options.map((label, i) => {
+    // Built with DOM APIs, never HTML strings: option labels are written by
+    // whoever created the poll and must not be able to inject markup.
+    optsEl.replaceChildren(...options.map((label, i) => {
       const pct = t ? Math.round(((votes[i] || 0) / t) * 100) : 0;
-      return '<button type="button" class="poll-opt" data-i="' + i + '" ' + (voted ? 'disabled' : '') + '>' +
-        '<span class="fill" style="width:0%;--bardelay:' + (i * 0.12) + 's"></span>' +
-        '<span class="row2"><span>' + label + '</span><span class="pct">' + pct + '%</span></span></button>';
-    }).join('');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'poll-opt';
+      btn.dataset.i = i;
+      btn.disabled = voted;
+      const fill = document.createElement('span');
+      fill.className = 'fill';
+      fill.style.width = '0%';
+      fill.style.setProperty('--bardelay', (i * 0.12) + 's');
+      const row = document.createElement('span');
+      row.className = 'row2';
+      const text = document.createElement('span');
+      text.textContent = label;
+      const pctEl = document.createElement('span');
+      pctEl.className = 'pct';
+      pctEl.textContent = pct + '%';
+      row.append(text, pctEl);
+      btn.append(fill, row);
+      return btn;
+    }));
     foot.textContent = t.toLocaleString('tr-TR') + ' oy verildi';
 
     if (!voted) {
@@ -412,6 +456,50 @@
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     attemptJoin(input.value.trim());
+  });
+
+  // ── Poll creation ─────────────────────────────────────────
+  // There are no accounts: creating a poll returns a secret manage link, and
+  // this browser remembers its links so they can be found again here.
+  const createBtn = document.getElementById('btn-create');
+  const createError = document.getElementById('create-error');
+
+  function loadMyPolls() {
+    try { return JSON.parse(localStorage.getItem('myPolls')) || []; } catch (e) { return []; }
+  }
+
+  function renderMyPolls() {
+    const list = loadMyPolls();
+    const ul = document.getElementById('my-polls-list');
+    ul.replaceChildren(...list.map((p) => {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = '/manage#' + encodeURIComponent(p.secret);
+      const code = document.createElement('span');
+      code.className = 'code';
+      code.textContent = p.code;
+      const q = document.createElement('span');
+      q.className = 'q';
+      q.textContent = p.question || '—';
+      a.append(code, q);
+      li.appendChild(a);
+      return li;
+    }));
+    document.getElementById('my-polls').hidden = list.length === 0;
+  }
+  renderMyPolls();
+
+  createBtn.addEventListener('click', () => {
+    createBtn.disabled = true;
+    createError.textContent = '';
+    socket.emit('createPoll', (res) => {
+      createBtn.disabled = false;
+      if (res.error) {
+        createError.textContent = res.error;
+        return;
+      }
+      location.href = '/manage#' + res.secret;
+    });
   });
 
   const urlParams = new URLSearchParams(location.search);

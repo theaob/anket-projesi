@@ -3,11 +3,18 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const { openDatabase } = require('./db');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+
+// The shared admin panel was replaced by per-poll manage links.
+app.get('/admin.html', (req, res) => res.redirect('/'));
+app.get('/manage', (req, res) => res.sendFile(path.join(__dirname, 'public', 'manage.html'), {
+    headers: { 'Cache-Control': 'no-cache' }
+}));
 
 app.use(express.static('public', {
     setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache')
@@ -16,6 +23,11 @@ app.use(express.static('public', {
 const MAX_OPTIONS = 20;
 const MAX_TEXT = 200;
 const VOTER_ID_RE = /^[a-f0-9]{32}$/;
+const MANAGE_SECRET_RE = /^[A-Za-z0-9_-]{32}$/;
+// Anyone can create polls and there are only 9000 four-digit codes, so cap
+// how fast a single address can create them.
+const CREATE_LIMIT = 20;
+const CREATE_WINDOW_MS = 60 * 60 * 1000;
 
 // polls: Map<code: string, poll>
 // poll: { code, question, options: string[], votes: number[],
@@ -30,8 +42,6 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const db = openDatabase(DATA_DIR);
 
 function loadPolls() {
-    const imported = db.importLegacyJson(path.join(DATA_DIR, 'polls.json'));
-    if (imported) console.log(`📥 polls.json dosyasından ${imported} anket veritabanına aktarıldı`);
     for (const p of db.loadAll()) polls.set(p.code, { ...p, active: new Map() });
     console.log(`📂 ${polls.size} anket yüklendi (${path.join(DATA_DIR, 'anket.db')})`);
 }
@@ -52,6 +62,13 @@ function generateCode() {
     return null;
 }
 
+// The manage secret is only ever shown to the poll's creator; the database
+// keeps its hash so a copy of the database file can't be used to take over
+// polls.
+function hashSecret(secret) {
+    return crypto.createHash('sha256').update(secret).digest('hex');
+}
+
 function abandonedCount(poll) {
     let n = 0;
     for (const [id, v] of poll.visitors) {
@@ -60,7 +77,7 @@ function abandonedCount(poll) {
     return n;
 }
 
-function adminView(poll) {
+function ownerView(poll) {
     return {
         code: poll.code,
         question: poll.question,
@@ -83,12 +100,8 @@ function voterView(poll, voterId) {
     };
 }
 
-function getPollList() {
-    return [...polls.values()].map(adminView);
-}
-
-function notifyAdmins() {
-    io.to('admin').emit('pollList', getPollList());
+function notifyOwners(poll) {
+    io.to(`manage:${poll.code}`).emit('managePoll', ownerView(poll));
 }
 
 // Every voter gets their own `voted` flag, so a plain room broadcast won't do.
@@ -115,15 +128,38 @@ function sameOptions(a, b) {
 
 function leavePoll(socket) {
     const code = socket.data.pollCode;
-    if (!code) return;
+    if (!code) return null;
     socket.leave(`poll:${code}`);
     socket.data.pollCode = null;
     const poll = polls.get(code);
-    if (!poll) return;
+    if (!poll) return null;
     const id = socket.data.voterId;
     const n = (poll.active.get(id) || 0) - 1;
     if (n > 0) poll.active.set(id, n);
     else poll.active.delete(id);
+    return poll;
+}
+
+function buildCsv(poll) {
+    let csvContent = "﻿";
+    csvContent += "Secenek,Oy Sayisi\n";
+    poll.options.forEach((opt, i) => {
+        const text = String(opt).replace(/"/g, '""');
+        csvContent += `"${text}",${poll.votes[i] || 0}\n`;
+    });
+    csvContent += `\nZiyaret,${poll.visitors.size}\n`;
+    csvContent += `Oy Vermeden Ayrilan,${abandonedCount(poll)}\n`;
+    return csvContent;
+}
+
+const createLog = new Map(); // address -> recent creation timestamps
+function allowCreate(address) {
+    const now = Date.now();
+    const recent = (createLog.get(address) || []).filter(t => now - t < CREATE_WINDOW_MS);
+    const allowed = recent.length < CREATE_LIMIT;
+    if (allowed) recent.push(now);
+    createLog.set(address, recent);
+    return allowed;
 }
 
 const getLocalIp = () => {
@@ -139,49 +175,45 @@ const getLocalIp = () => {
 const localIp = getLocalIp();
 const PORT = 3000;
 
-// CSV export for a specific poll
-app.get('/export', (req, res) => {
-    const code = req.query.code;
-    const poll = polls.get(code);
-    if (!poll) return res.status(404).send('Anket bulunamadı.');
-
-    let csvContent = "\uFEFF";
-    csvContent += "Secenek,Oy Sayisi\n";
-    poll.options.forEach((opt, i) => {
-        const text = String(opt).replace(/"/g, '""');
-        csvContent += `"${text}",${poll.votes[i] || 0}\n`;
-    });
-    csvContent += `\nZiyaret,${poll.visitors.size}\n`;
-    csvContent += `Oy Vermeden Ayrilan,${abandonedCount(poll)}\n`;
-    res.setHeader('Content-disposition', `attachment; filename=anket_${code}.csv`);
-    res.set('Content-Type', 'text/csv; charset=utf-8');
-    res.send(csvContent);
-});
-
 io.on('connection', (socket) => {
     // Voters identify themselves with a random per-browser ID so the server,
     // not localStorage, decides whether someone has already voted.
     const claimed = socket.handshake.auth?.voterId;
     socket.data.voterId = typeof claimed === 'string' && VOTER_ID_RE.test(claimed) ? claimed : `s:${socket.id}`;
     socket.data.pollCode = null;
+    // Codes of the polls this socket has proven (with the secret) it may manage.
+    socket.data.owned = new Set();
 
-    // ── Admin events ───────────────────────────────────────────
-    socket.on('joinAdmin', () => {
-        socket.join('admin');
-        socket.emit('pollList', getPollList());
+    const reply = (ack, value) => { if (typeof ack === 'function') ack(value); };
+    const ownedPoll = (code) => (socket.data.owned.has(code) ? polls.get(code) : null);
+
+    // ── Owner events ───────────────────────────────────────────
+    socket.on('createPoll', (ack) => {
+        if (!allowCreate(socket.handshake.address)) {
+            return reply(ack, { error: 'Çok fazla anket oluşturuldu, lütfen daha sonra tekrar deneyin.' });
+        }
+        const code = generateCode();
+        if (!code) return reply(ack, { error: 'Şu anda boş anket kodu yok, lütfen daha sonra tekrar deneyin.' });
+        const secret = crypto.randomBytes(24).toString('base64url');
+        db.createPoll(code, 'Yeni Anket', hashSecret(secret));
+        polls.set(code, { code, question: 'Yeni Anket', options: [], votes: [], visitors: new Map(), active: new Map() });
+        reply(ack, { code, secret });
     });
 
-    socket.on('createPoll', () => {
-        const code = generateCode();
-        if (!code) return;
-        db.createPoll(code, 'Yeni Anket');
-        polls.set(code, { code, question: 'Yeni Anket', options: [], votes: [], visitors: new Map(), active: new Map() });
-        notifyAdmins();
-        socket.emit('pollCreated', code);
+    // Unlocks management of one poll for this socket.
+    socket.on('manage', (secret, ack) => {
+        const code = typeof secret === 'string' && MANAGE_SECRET_RE.test(secret)
+            ? db.findCodeByManageHash(hashSecret(secret))
+            : null;
+        const poll = code && polls.get(code);
+        if (!poll) return reply(ack, { error: 'Anket bulunamadı. Bağlantı hatalı olabilir ya da anket silinmiş olabilir.' });
+        socket.data.owned.add(code);
+        socket.join(`manage:${code}`);
+        reply(ack, { poll: ownerView(poll) });
     });
 
     socket.on('updatePoll', (payload) => {
-        const poll = polls.get(payload?.code);
+        const poll = ownedPoll(payload?.code);
         if (!poll || !Array.isArray(payload.options)) return;
         const options = payload.options.map(cleanText).filter(Boolean).slice(0, MAX_OPTIONS);
         const question = cleanText(payload.question);
@@ -194,19 +226,23 @@ io.on('connection', (socket) => {
             poll.options = options;
             resetRound(poll);
         }
-        notifyAdmins();
+        notifyOwners(poll);
         sendInitToRoom(poll);
     });
 
     socket.on('deletePoll', (code) => {
-        if (!polls.has(code)) return;
+        const poll = ownedPoll(code);
+        if (!poll) return;
         db.deletePoll(code);
         polls.delete(code);
-        notifyAdmins();
+        io.to(`poll:${code}`).emit('pollError', 'Bu anket silindi.');
+        io.in(`poll:${code}`).socketsLeave(`poll:${code}`);
+        io.to(`manage:${code}`).emit('pollDeleted', code);
+        io.in(`manage:${code}`).socketsLeave(`manage:${code}`);
     });
 
     socket.on('resetVotes', (code) => {
-        const poll = polls.get(code);
+        const poll = ownedPoll(code);
         if (!poll) return;
         // Visitors who aren't connected are forgotten, which resets the visit
         // and "left without voting" counters too.
@@ -214,8 +250,15 @@ io.on('connection', (socket) => {
         db.resetVotes(code, dropped);
         resetRound(poll);
         for (const id of dropped) poll.visitors.delete(id);
-        notifyAdmins();
+        notifyOwners(poll);
         sendInitToRoom(poll);
+    });
+
+    // Returned over the socket rather than from a URL so the manage secret
+    // never has to appear in a link or a server log.
+    socket.on('exportCsv', (code, ack) => {
+        const poll = ownedPoll(code);
+        reply(ack, poll ? { csv: buildCsv(poll) } : { error: 'Anket bulunamadı.' });
     });
 
     // ── Voter events ───────────────────────────────────────────
@@ -226,7 +269,8 @@ io.on('connection', (socket) => {
             return;
         }
         if (socket.data.pollCode !== code) {
-            leavePoll(socket);
+            const previous = leavePoll(socket);
+            if (previous) notifyOwners(previous);
             socket.join(`poll:${code}`);
             socket.data.pollCode = code;
             const id = socket.data.voterId;
@@ -237,7 +281,7 @@ io.on('connection', (socket) => {
             }
         }
         socket.emit('init', voterView(poll, socket.data.voterId));
-        notifyAdmins();
+        notifyOwners(poll);
     });
 
     socket.on('castVote', (payload) => {
@@ -256,13 +300,12 @@ io.on('connection', (socket) => {
         visitor.voted = true;
         visitor.choice = index;
         io.to(`poll:${code}`).emit('updateVotes', poll.votes);
-        notifyAdmins();
+        notifyOwners(poll);
     });
 
     socket.on('disconnect', () => {
-        if (!socket.data.pollCode) return;
-        leavePoll(socket);
-        notifyAdmins();
+        const poll = leavePoll(socket);
+        if (poll) notifyOwners(poll);
     });
 });
 
@@ -270,5 +313,4 @@ loadPolls();
 
 server.listen(PORT, () => {
     console.log(`🚀 Sunucu Hazır: http://${localIp}:${PORT}`);
-    console.log(`🛠 Admin Paneli: http://${localIp}:${PORT}/admin.html`);
 });

@@ -8,9 +8,11 @@ const fs = require('fs');
 const path = require('path');
 const { DatabaseSync } = require('node:sqlite');
 
-const SCHEMA_VERSION = 1;
-
-const SCHEMA = `
+// Each entry upgrades the schema by one version; PRAGMA user_version records
+// how many have been applied.
+const MIGRATIONS = [
+    // 1: initial schema
+    `
 CREATE TABLE polls (
     code        TEXT PRIMARY KEY,
     question    TEXT NOT NULL,
@@ -38,7 +40,17 @@ CREATE TABLE votes (
     PRIMARY KEY (poll_code, voter_id),
     FOREIGN KEY (poll_code, voter_id) REFERENCES visitors(poll_code, voter_id) ON DELETE CASCADE
 );
-`;
+`,
+    // 2: per-poll owners. Each poll is managed through a secret link; only the
+    // secret's SHA-256 hash is stored. Polls from the shared-admin era have no
+    // owner, so they are removed (cascading to options, visitors and votes).
+    `
+DELETE FROM polls;
+ALTER TABLE polls ADD COLUMN manage_hash TEXT;
+CREATE UNIQUE INDEX polls_manage_hash ON polls(manage_hash);
+`,
+];
+const SCHEMA_VERSION = MIGRATIONS.length;
 
 function openDatabase(dataDir) {
     fs.mkdirSync(dataDir, { recursive: true });
@@ -46,17 +58,19 @@ function openDatabase(dataDir) {
     db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
 
     const version = db.prepare('PRAGMA user_version').get().user_version;
-    if (version === 0) {
-        transaction(db, () => {
-            db.exec(SCHEMA);
-            db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
-        });
-    } else if (version > SCHEMA_VERSION) {
+    if (version > SCHEMA_VERSION) {
         throw new Error(`Veritabanı şeması (${version}) bu sürümden (${SCHEMA_VERSION}) daha yeni.`);
+    }
+    for (let v = version; v < SCHEMA_VERSION; v++) {
+        transaction(db, () => {
+            db.exec(MIGRATIONS[v]);
+            db.exec(`PRAGMA user_version = ${v + 1}`);
+        });
     }
 
     const stmt = {
-        insertPoll: db.prepare('INSERT INTO polls (code, question) VALUES (?, ?)'),
+        insertPoll: db.prepare('INSERT INTO polls (code, question, manage_hash) VALUES (?, ?, ?)'),
+        codeByManageHash: db.prepare('SELECT code FROM polls WHERE manage_hash = ?'),
         updateQuestion: db.prepare("UPDATE polls SET question = ?, updated_at = datetime('now') WHERE code = ?"),
         deletePoll: db.prepare('DELETE FROM polls WHERE code = ?'),
         deleteOptions: db.prepare('DELETE FROM options WHERE poll_code = ?'),
@@ -71,7 +85,6 @@ function openDatabase(dataDir) {
             SELECT v.poll_code, v.voter_id, vo.position
             FROM visitors v
             LEFT JOIN votes vo ON vo.poll_code = v.poll_code AND vo.voter_id = v.voter_id`),
-        pollCount: db.prepare('SELECT COUNT(*) AS n FROM polls'),
     };
 
     return {
@@ -96,8 +109,13 @@ function openDatabase(dataDir) {
             return [...polls.values()];
         },
 
-        createPoll(code, question) {
-            stmt.insertPoll.run(code, question);
+        createPoll(code, question, manageHash) {
+            stmt.insertPoll.run(code, question, manageHash);
+        },
+
+        // Returns the code of the poll a manage-secret hash belongs to, or null.
+        findCodeByManageHash(manageHash) {
+            return stmt.codeByManageHash.get(manageHash)?.code ?? null;
         },
 
         // Pass `options` only when they changed: that replaces the options and
@@ -132,25 +150,6 @@ function openDatabase(dataDir) {
                 stmt.deleteVotes.run(code);
                 for (const id of dropVoterIds) stmt.deleteVisitor.run(code, id);
             });
-        },
-
-        // One-time import of the polls.json file written by the previous
-        // file-based storage. Only runs into an empty database.
-        importLegacyJson(file) {
-            if (!fs.existsSync(file) || stmt.pollCount.get().n > 0) return 0;
-            const legacy = JSON.parse(fs.readFileSync(file, 'utf8'));
-            transaction(db, () => {
-                for (const p of legacy) {
-                    stmt.insertPoll.run(p.code, p.question);
-                    p.options.forEach((text, i) => stmt.insertOption.run(p.code, i, text));
-                    for (const [id, v] of p.visitors) {
-                        stmt.insertVisitor.run(p.code, id);
-                        if (v.voted && Number.isInteger(v.choice)) stmt.insertVote.run(p.code, id, v.choice);
-                    }
-                }
-            });
-            fs.renameSync(file, file + '.imported');
-            return legacy.length;
         },
 
         close() {

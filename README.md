@@ -8,8 +8,7 @@ Kapalı ağlarda (Intranet) çalışmak üzere tasarlanmış, ultra profesyonel 
 
 * **💎 Premium UI:** Glassmorphism ve modern animasyonlarla donatılmış akıcı arayüz.
 * **📡 Canlı Sonuçlar:** Socket.io ile anlık grafik güncellemeleri.
-* **🛠 Admin Paneli:** Anketi anlık düzenleme ve sonuçları sıfırlama yetkisi.
-* **⚖️ Ağırlıklı Puanlama:** Seçeneklere rakamsal değer atayabilme ve sonuçlarda genel ortalama takibi.
+* **👥 Herkes Kendi Anketini Oluşturur:** Hesap gerekmez. Ana sayfadan anket oluşturan kişiye gizli bir yönetim bağlantısı verilir; anketi yalnızca bu bağlantıya sahip olanlar düzenleyebilir, sıfırlayabilir veya silebilir.
 * **🚀 GitHub Otomasyonu:** Versiyon kontrolü ve otomatik GitHub Release yayını.
 * **📊 Excel Export:** Sonuçları tek tıkla CSV/Excel formatında indirme.
 * **🔒 Kapalı Ağ Uyumu:** İnternet bağımlılığı olmadan %100 offline çalışma.
@@ -22,6 +21,16 @@ Kapalı ağlarda (Intranet) çalışmak üzere tasarlanmış, ultra profesyonel 
 2. Sunucuyu başlatın: `node server.js` (Node.js 22.13+)
 3. Tarayıcıda açın: `http://localhost:3000`
 
+## 🗳 Kullanım
+1. Ana sayfada **"Yeni anket oluştur"** düğmesine basın. Anketin yönetim sayfasına (`/manage#<gizli-anahtar>`) yönlendirilirsiniz.
+2. Soruyu ve seçenekleri girip **Yayınla**'ya basın.
+3. Katılımcılarla 4 haneli kodu ya da katılım bağlantısını (`/?code=1234`) paylaşın.
+4. Yönetim sayfasında sonuçları canlı izleyin; oyları sıfırlayın, Excel'e aktarın veya anketi silin.
+
+**Yönetim bağlantısını saklayın:** anketi yönetmenin tek yolu budur ve kaybolursa geri alınamaz. Bağlantıya sahip olan herkes anketi yönetebilir, bu yüzden yalnızca birlikte yönettiğiniz kişilerle paylaşın. Aynı tarayıcıda oluşturduğunuz anketler ana sayfada "Bu tarayıcıda oluşturduğun anketler" altında listelenir. Sunucu, anahtarın yalnızca özetini (SHA-256) saklar.
+
+Kötüye kullanımı sınırlamak için aynı adresten saatte en fazla 20 anket oluşturulabilir.
+
 ### Docker ile Kurulum
 ```bash
 docker build -t poll-app .
@@ -33,4 +42,4 @@ Anketler, seçenekler, ziyaretçiler ve oylar bir SQLite veritabanında (`data/a
 
 Docker'da verinin kaybolmaması için yukarıdaki gibi `/app/data` dizinine bir volume bağlayın. Yedek almak için sunucu çalışırken bile `sqlite3 data/anket.db ".backup yedek.db"` kullanılabilir.
 
-Önceki sürümün `data/polls.json` dosyası varsa, ilk açılışta veritabanına otomatik olarak aktarılır ve dosya `polls.json.imported` olarak yeniden adlandırılır.
+Ortak admin panelli eski sürümden yükseltirken, sahibi olmayan mevcut anketler ve sonuçları veritabanından silinir.

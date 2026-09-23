@@ -6,6 +6,7 @@ ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 ## [Unreleased]
 
 ### Düzeltildi
+- **Seçenek metinleriyle kod enjeksiyonu (XSS)**: Oy ekranı seçenek metinlerini artık HTML olarak değil düz metin olarak gösteriyor; anket oluşturan biri katılımcıların tarayıcısında kod çalıştıramıyor.
 - **Sunucu tarafında oy sınırı**: Her tarayıcı rastgele bir kimlikle bağlanıyor ve sunucu, aynı kimliğin bir ankette ikinci kez oy vermesini reddediyor. Oy vermek için önce ankete katılmış olmak gerekiyor ve geçersiz seçenek indeksleri reddediliyor. Önceden sınır yalnızca tarayıcıdaki `localStorage` bayrağıydı.
 - **Kaydet oyları silmiyor**: Anketi kaydetmek artık yalnızca seçenekler değiştiyse oyları sıfırlıyor (ve admin panelinde önce onay isteniyor). Soru metnindeki bir düzeltme oyları korur.
 - **Bağlantı kopunca otomatik yeniden katılma**: Oy ekranı ve admin paneli yeniden bağlandığında ankete/admin odasına tekrar katılıyor; bağlantı koptuğunda bir uyarı gösteriliyor.
@@ -13,7 +14,12 @@ ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 - **Boş GitHub Release notları**: Yayın iş akışı CHANGELOG bölümünü `v` önekiyle aradığı için hiçbir zaman bulamıyordu; artık doğru bölüm çıkarılıyor.
 
 ### Eklendi
-- **SQLite veritabanı**: Anketler, seçenekler, ziyaretçiler ve oylar `data/anket.db` SQLite veritabanında saklanıyor ve sunucu başlarken geri yükleniyor (`DATA_DIR` ile değiştirilebilir). Her oy, zaman damgasıyla ayrı bir satır olarak kaydediliyor; "kişi başı tek oy" kuralı veritabanı tarafından da uygulanıyor. Node.js'in yerleşik `node:sqlite` modülü kullanıldığından ek bağımlılık yok. Docker imajı `/app/data` volume'ü tanımlıyor. Varsa eski `data/polls.json` dosyası ilk açılışta otomatik olarak aktarılıyor.
+- **Herkes kendi anketini yönetir**: Ortak admin paneli kaldırıldı. Ana sayfadaki "Yeni anket oluştur" düğmesiyle herkes anket oluşturabiliyor ve anketi yalnızca oluşturana verilen gizli yönetim bağlantısıyla (`/manage#…`) düzenlenebiliyor, sıfırlanabiliyor, dışa aktarılabiliyor veya silinebiliyor. Sunucu anahtarın yalnızca SHA-256 özetini saklıyor. Tarayıcı, oluşturduğu anketlerin bağlantılarını hatırlıyor ve ana sayfada listeliyor. Kötüye kullanımı önlemek için adres başına saatte 20 anket sınırı var.
+- **SQLite veritabanı**: Anketler, seçenekler, ziyaretçiler ve oylar `data/anket.db` SQLite veritabanında saklanıyor ve sunucu başlarken geri yükleniyor (`DATA_DIR` ile değiştirilebilir). Her oy, zaman damgasıyla ayrı bir satır olarak kaydediliyor; "kişi başı tek oy" kuralı veritabanı tarafından da uygulanıyor. Node.js'in yerleşik `node:sqlite` modülü kullanıldığından ek bağımlılık yok. Docker imajı `/app/data` volume'ü tanımlıyor.
+
+### Kaldırıldı
+- `admin.html` ve ortak admin paneli (eski adres ana sayfaya yönlendiriliyor). Yükseltme sırasında, sahibi olmayan mevcut anketler ve sonuçları veritabanından siliniyor.
+- `/export` adresi kaldırıldı; CSV dışa aktarımı artık yönetim sayfasından yapılıyor.
 
 ### Değiştirildi
 - Docker imajı Node.js 18'den (desteği sona erdi) Node.js 22'ye yükseltildi; artık Node.js 22.13+ gerekiyor.

@@ -3,7 +3,7 @@
 **Date:** 2026-09-22
 **Scope:** `server.js`, `public/index.html`, `public/admin.html`, `public/style.css`, `Dockerfile`, `.github/workflows/*`, `package.json`, `README.md`, `CHANGELOG.md`
 
-> **Status update:** H1–H5 are fixed. The same change also fixes M2 and M4, fixes most of M3, and closes the specific crash in C1 (see the ✅ notes below). The other critical items (C2–C4) are still open.
+> **Status update:** H1–H5 are fixed, along with M2 and M4, and most of M3. C2 no longer applies: the shared admin panel was replaced by a secret manage link for each poll. C1, C3 and C4 are partly fixed. See the ✅ notes below.
 
 Findings marked **(verified)** were reproduced against a running server or checked on GitHub. The others come from reading the code.
 
@@ -36,13 +36,15 @@ For an app meant to run on a closed intranet, the top priority is the first two 
 - Wrap handlers in a `safe(fn)` helper that catches errors and logs them.
 - Add a `process.on('uncaughtException')` logger as a last resort, and run the container with `--restart unless-stopped`.
 
-### C2. The admin interface has no authentication
+### C2. The admin interface has no authentication — ✅ no longer applies
 `admin.html` is served publicly, and the server trusts every socket for `joinAdmin`, `createPoll`, `updatePoll`, `deletePoll` and `resetVotes` (`server.js:65-102`). Any voter can open the browser console and delete or rewrite every poll. `joinAdmin` also sends every poll's full data to whoever asks.
 
 **Fix:**
 - Require an `ADMIN_TOKEN` (env var) or a password login.
 - Check it in a Socket.IO namespace middleware, for example `io.of('/admin').use(...)`, and move the admin events into that namespace.
 - Protect `/admin.html` and `/export` with the same check.
+
+> ✅ The shared admin panel and `/export` were removed. Anyone can create a poll and receives a secret manage link (`/manage#<secret>`); only the SHA-256 hash of the secret is stored. The server rejects every owner action (edit, reset, export, delete) from a socket that hasn't unlocked that poll with its secret.
 
 ### C3. Stored XSS in the voter page and the admin panel
 Poll text written by one user is inserted into other users' pages as raw HTML:
@@ -52,12 +54,16 @@ Poll text written by one user is inserted into other users' pages as raw HTML:
 
 Combined with C2, anyone can inject script into the admin's browser.
 
+> ✅ **Partly fixed:** the voter page now builds option buttons with `textContent`. `admin.html` was removed, and the new `manage.html` never inserts user text as HTML. There is no Content-Security-Policy header yet.
+
 **Fix:**
 - Build these elements with `textContent` and `createElement` instead of HTML strings, or escape the text.
 - Add a Content-Security-Policy header that blocks inline script. This requires moving the inline `<script>` blocks into files, which also removes the `onclick=` attributes in `admin.html`.
 
 ### C4. `generateCode()` loops forever once all 9000 codes are used
 `server.js:18-24` retries random 4-digit codes until it finds a free one. With 9000 polls there is no free code, and the loop blocks the event loop permanently. `createPoll` has no auth or rate limit, so a script can reach that state in seconds. Each poll also costs memory with no limit.
+
+> ✅ **Partly fixed:** `generateCode()` gives up after 100 attempts and returns an error instead of hanging. Creation is limited to 20 polls per hour per address. Codes are still 4 digits, and old polls are not removed automatically.
 
 **Fix:** cap the number of polls or the creation rate, and fail with an error after N attempts. Longer codes (5–6 digits) and removing old polls automatically would also help.
 
