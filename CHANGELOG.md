@@ -15,8 +15,10 @@ ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 - **`PORT` ortam değişkeni** (varsayılan `3000`).
 
 ### Değiştirildi
+- **Canlı güncellemeler toplu gönderiliyor**: Her oyda tüm katılımcılara, yöneticilere ve sunum ekranlarına ayrı ayrı mesaj gitmesi yerine güncellemeler anket başına en fazla 250 ms'de bir, en son durumu taşıyarak gönderiliyor. İlk değişiklik anında gider, hiçbir güncelleme kaybolmaz. Kalabalık salonlarda sunucu ve ağ yükü büyük ölçüde azalıyor.
+- **"Oy vermeden ayrılan" sayısı kısa kopmaları saymıyor**: Ziyaretçi ancak 10 saniye geri dönmezse ayrılmış sayılıyor; sayfa yenileme veya kısa bağlantı kopması sayıyı artırmıyor. Süre dolduğunda yönetim sayfası kendiliğinden güncelleniyor.
 - Docker derlemesi `package-lock.json` ile `npm ci` kullanıyor; bağımlılık sürümleri artık sabit.
-- GitHub Actions: `actions/checkout` v5'e yükseltildi; yayın iş akışında yalnızca sürüm oluşturan iş yazma yetkisine sahip.
+- GitHub Actions: tüm eylemler Node 24 kullanan sürümlere yükseltildi (`actions/checkout` v5, `actions/setup-node` v5, `docker/setup-buildx-action` v4, `docker/login-action` v4, `docker/build-push-action` v7, `softprops/action-gh-release` v3); yayın iş akışında yalnızca sürüm oluşturan iş yazma yetkisine sahip. CI, Docker imajını yayın iş akışıyla aynı eylemlerle derliyor.
 
 ## [2.0.0] - 2026-09-23
 

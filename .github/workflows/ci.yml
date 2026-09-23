@@ -33,8 +33,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      # Same Docker actions as the release workflow, so a breaking change in
+      # them shows up here rather than during a release.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
       - name: Build image
-        run: docker build -t anket-app:ci .
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: anket-app:ci
 
       - name: Smoke test the container
         run: |

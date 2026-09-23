@@ -263,3 +263,63 @@ describe('behind a trusted proxy', () => {
         assert.match(setCookie, /; Secure/);
     });
 });
+
+describe('live updates', () => {
+    let server;
+    before(async () => { server = await startServer({ VOTER_ID_BURST: '100' }); });
+    after(() => server.stop());
+
+    it('batches updates under a burst of votes without losing any', async () => {
+        const { owner, code, state } = await createPoll(server.url, 'Q', ['A', 'B']);
+        let ownerUpdates = 0;
+        owner.on('managePoll', () => { ownerUpdates++; });
+
+        // A voter who has already voted sees results, so it receives updateVotes.
+        const { cookie: watcherCookie } = await voterCookie(server.url);
+        const watcher = await joinAsVoter(server.url, code, watcherCookie);
+        watcher.socket.emit('castVote', { code, index: 1 });
+        await wait(400);
+        let voterUpdates = 0;
+        let lastVotes = null;
+        watcher.socket.on('updateVotes', (votes) => { voterUpdates++; lastVotes = votes; });
+        ownerUpdates = 0;
+
+        const voters = [];
+        for (let i = 0; i < 40; i++) {
+            const { cookie } = await voterCookie(server.url);
+            voters.push(await joinAsVoter(server.url, code, cookie));
+        }
+        ownerUpdates = 0;
+        for (const v of voters) v.socket.emit('castVote', { code, index: 0 });
+        await wait(1000);
+
+        assert.deepEqual((await state()).votes, [40, 1]);
+        assert.deepEqual(lastVotes, [40, 1], 'the last update carries the final counts');
+        assert.ok(voterUpdates >= 1 && voterUpdates < 20, `voter got ${voterUpdates} updates for 40 votes`);
+        assert.ok(ownerUpdates >= 1 && ownerUpdates < 20, `owner got ${ownerUpdates} updates for 40 votes`);
+    });
+
+    it('counts a visitor as "left without voting" only after the grace period', async () => {
+        const { owner, code, state } = await createPoll(server.url);
+
+        // Leaves and comes back quickly (a reload): never counted.
+        const { cookie: quick } = await voterCookie(server.url);
+        (await joinAsVoter(server.url, code, quick)).socket.close();
+        await wait(300);
+        assert.equal((await state()).abandoned, 0);
+        const back = await joinAsVoter(server.url, code, quick);
+
+        // Leaves for good: counted once the grace period (10 s) is over, and
+        // the managers are told without any other event happening.
+        const { cookie: gone } = await voterCookie(server.url);
+        (await joinAsVoter(server.url, code, gone)).socket.close();
+        await wait(300);
+        assert.equal((await state()).abandoned, 0);
+        const counted = await new Promise((resolve) => {
+            owner.on('managePoll', (p) => { if (p.abandoned === 1) resolve(p); });
+        });
+        assert.equal(counted.abandoned, 1);
+        assert.equal(counted.visits, 2);
+        back.socket.close();
+    });
+});
