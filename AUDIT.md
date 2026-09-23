@@ -74,7 +74,7 @@ Combined with C2, anyone can inject script into the admin's browser.
 ### H1. Vote limits are enforced only in the browser — ✅ fixed
 The one-vote rule lives in `localStorage` in the browser. The server accepts `castVote` from any socket, any number of times, even without a prior `joinPoll` (`server.js:119-126`). A loop in the console, a private window or a different browser can stuff the ballot.
 
-> ✅ Each browser now sends a random voter ID. The server records who has voted per poll and round, rejects second votes and votes from sockets that haven't joined, and checks the option index. **Remaining limit:** someone who writes a script that generates new IDs can still vote more than once. Stopping that needs authentication (see C2) or per-IP limits.
+> ✅ The server records who has voted per poll and round, rejects second votes and votes from sockets that haven't joined, and checks the option index. **Update (online hardening):** voter IDs are no longer chosen by the browser. The server issues a signed HttpOnly cookie, and only at a limited rate per client network (IPv4 address or IPv6 /64). An optional Cloudflare Turnstile check can be required first, and `TRUST_PROXY` gives correct client addresses behind a reverse proxy. Measured before the change: one script cast 838 votes in 1.8 s. After: 0 votes without a cookie, and 30 identities then 6 per minute from one network. **Remaining limit:** an attacker with many networks or devices can still vote several times; only user accounts would stop that.
 
 **Fix:**
 - Track voters on the server per poll, by socket or by a signed cookie / device ID, and reject a second vote.

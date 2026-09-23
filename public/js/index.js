@@ -144,22 +144,117 @@
   const foot = document.getElementById('poll-foot');
   const conn = document.getElementById('conn');
 
-  // A random per-browser ID lets the server remember who already voted, so
-  // voting limits and the results view no longer rely on localStorage flags.
-  function getVoterId() {
-    try {
-      const saved = localStorage.getItem('voterId');
-      if (saved) return saved;
-    } catch (e) {}
-    const bytes = crypto.getRandomValues(new Uint8Array(16));
-    const id = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-    try { localStorage.setItem('voterId', id); } catch (e) {}
-    return id;
-  }
-  const voterId = getVoterId();
-
-  const socket = io({ auth: { voterId } });
+  const socket = io();
   let currentCode = null;
+
+  // ── Voter identity ────────────────────────────────────────
+  // The server issues each browser a signed voter cookie (/api/voter), which
+  // is what limits everyone to one vote. It may first ask for a Cloudflare
+  // Turnstile check, or ask us to wait if this network created many voters
+  // recently; both are handled here, retrying until an identity is issued.
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const turnstileBox = document.getElementById('turnstile');
+  let turnstileScript = null;
+  // Shown while waiting for an identity; kept when other code clears errors.
+  let identityMessage = '';
+  function setIdentityMessage(text) {
+    identityMessage = text;
+    error.textContent = text;
+  }
+
+  function loadTurnstile() {
+    if (!turnstileScript) {
+      turnstileScript = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+        script.async = true;
+        script.onload = () => resolve(window.turnstile);
+        script.onerror = () => { turnstileScript = null; reject(new Error('turnstile')); };
+        document.head.appendChild(script);
+      });
+    }
+    return turnstileScript;
+  }
+
+  // Runs the check; usually invisible, it only shows a box when Cloudflare
+  // wants the visitor to click.
+  async function turnstileToken(siteKey) {
+    const turnstile = await loadTurnstile();
+    turnstileBox.replaceChildren();
+    turnstileBox.hidden = false;
+    try {
+      return await new Promise((resolve, reject) => {
+        turnstile.render(turnstileBox, {
+          sitekey: siteKey,
+          appearance: 'interaction-only',
+          callback: resolve,
+          'error-callback': () => reject(new Error('turnstile'))
+        });
+      });
+    } finally {
+      turnstileBox.hidden = true;
+    }
+  }
+
+  async function obtainIdentity() {
+    let token;
+    for (let attempt = 1; ; attempt++) {
+      let res = null;
+      let data = {};
+      try {
+        res = await fetch('/api/voter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(token ? { turnstileToken: token } : {})
+        });
+        data = await res.json().catch(() => ({}));
+      } catch (e) { /* offline or server down: retry below */ }
+      if (res && res.ok) {
+        if (identityMessage) setIdentityMessage('');
+        return;
+      }
+      if (res && res.status === 401 && data.challenge === 'turnstile') {
+        try {
+          token = await turnstileToken(data.siteKey);
+          continue;
+        } catch (e) {
+          data.error = 'Güvenlik doğrulaması yüklenemedi, tekrar deneniyor…';
+        }
+      }
+      token = undefined; // a Turnstile token can only be used once
+      setIdentityMessage(data.error || 'Sunucuya ulaşılamadı, tekrar deneniyor…');
+      await sleep(res && res.status === 429 ? (data.retryAfterSec || 10) * 1000 : Math.min(30000, 2000 * attempt));
+    }
+  }
+
+  // The socket connects straight away (creating a poll needs no identity).
+  // The server says on each connection whether it saw a voter cookie; if the
+  // cookie arrived after the handshake, reconnect once so the server sees it.
+  // Joining a poll waits until the server has confirmed a voter connection.
+  let haveIdentity = false;
+  let voterConnected;
+  const voterReady = new Promise((resolve) => { voterConnected = resolve; });
+  let socketIsVoter = null;
+  let reconnectedForIdentity = false;
+  function syncIdentity() {
+    if (!haveIdentity || socketIsVoter !== false) return;
+    if (reconnectedForIdentity) {
+      error.textContent = 'Oy vermek için bu sitede çerezlere izin verin.';
+      return;
+    }
+    reconnectedForIdentity = true;
+    socket.disconnect();
+    socket.connect();
+  }
+  socket.on('session', ({ voter }) => {
+    socketIsVoter = voter;
+    if (voter) voterConnected();
+    syncIdentity();
+  });
+  obtainIdentity().then(() => {
+    haveIdentity = true;
+    syncIdentity();
+  });
   let options = [];
   let voted = false;
   let votingOpen = true;
@@ -332,8 +427,8 @@
       input.focus();
       return;
     }
-    error.textContent = '';
-    socket.emit('joinPoll', code);
+    error.textContent = identityMessage;
+    voterReady.then(() => socket.emit('joinPoll', code));
   }
 
   form.addEventListener('submit', (e) => {

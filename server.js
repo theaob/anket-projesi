@@ -5,23 +5,56 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 const QRCode = require('qrcode');
+const proxyaddr = require('proxy-addr');
 const { openDatabase } = require('./db');
+const { createIdentity, verifyTurnstile } = require('./identity');
+const { clientKey, createLimiter: createLimiter_ } = require('./rate-limit');
+
+// ── Configuration (environment variables, see README) ──────────
+const envInt = (name, fallback) => {
+    const n = Number.parseInt(process.env[name], 10);
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+// Behind a reverse proxy (needed for HTTPS online), the client's real address
+// is in X-Forwarded-For. It is only trusted when TRUST_PROXY says how many
+// proxies to trust (e.g. 1) or which addresses they have (e.g. "loopback"),
+// because otherwise any client could fake it and dodge the rate limits.
+const TRUST_PROXY = /^\d+$/.test(process.env.TRUST_PROXY || '')
+    ? Number(process.env.TRUST_PROXY)
+    : (process.env.TRUST_PROXY || false);
+// New voter identities per client: a burst, refilled at a steady hourly rate.
+const VOTER_ID_BURST = envInt('VOTER_ID_BURST', 30);
+const VOTER_ID_PER_HOUR = envInt('VOTER_ID_PER_HOUR', 360);
+// Optional Cloudflare Turnstile bot check before a voter identity is issued.
+const TURNSTILE_SITE_KEY = process.env.TURNSTILE_SITE_KEY || '';
+const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '';
+const TURNSTILE = Boolean(TURNSTILE_SITE_KEY && TURNSTILE_SECRET_KEY);
 
 const app = express();
+app.set('trust proxy', TRUST_PROXY);
+const trustProxy = app.get('trust proxy fn');
 const server = http.createServer(app);
 // Every legitimate message is small (at most 20 options of 200 characters).
 const io = new Server(server, { maxHttpBufferSize: 64 * 1024 });
 
+// The client's address, for rate limiting, honouring TRUST_PROXY.
+function clientIp(req) {
+    return proxyaddr(req, trustProxy);
+}
+
 // Content-Security-Policy: scripts may only come from this server's own
 // files, so even if poll text were ever rendered as HTML it could not run.
 // Inline <style> blocks are still used by the pages, hence 'unsafe-inline'
-// for styles only.
+// for styles only. Turnstile, when enabled, needs Cloudflare's script and
+// frame.
+const CLOUDFLARE = 'https://challenges.cloudflare.com';
 const CSP = [
     "default-src 'self'",
-    "script-src 'self'",
+    `script-src 'self'${TURNSTILE ? ' ' + CLOUDFLARE : ''}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "connect-src 'self'",
+    `frame-src ${TURNSTILE ? CLOUDFLARE : "'none'"}`,
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'self'",
@@ -32,6 +65,49 @@ app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin');
     next();
+});
+
+// A proxy is forwarding client addresses but TRUST_PROXY is not set: every
+// client then looks like the proxy and shares one rate limit. Warn once.
+let warnedAboutProxy = false;
+app.use((req, res, next) => {
+    if (!TRUST_PROXY && !warnedAboutProxy && req.headers['x-forwarded-for']) {
+        warnedAboutProxy = true;
+        console.warn('⚠️  X-Forwarded-For başlığı alındı ama TRUST_PROXY ayarlı değil; tüm istemciler vekil sunucunun adresinden geliyor sayılacak. README\'deki "İnternette yayınlama" bölümüne bakın.');
+    }
+    next();
+});
+
+// ── Voter identity ─────────────────────────────────────────────
+// The voter page calls this before connecting. A browser that already has a
+// valid cookie keeps it; otherwise a new identity is issued, subject to the
+// per-client limit and, when enabled, a Turnstile check.
+app.post('/api/voter', express.json({ limit: '4kb' }), async (req, res) => {
+    try {
+        if (identity.fromCookieHeader(req.headers.cookie)) return res.json({ ok: true });
+        const ip = clientIp(req);
+        if (TURNSTILE) {
+            const token = req.body?.turnstileToken;
+            if (!token) return res.status(401).json({ challenge: 'turnstile', siteKey: TURNSTILE_SITE_KEY });
+            if (!(await verifyTurnstile(TURNSTILE_SECRET_KEY, token, ip))) {
+                return res.status(403).json({ error: 'Doğrulama başarısız oldu, lütfen tekrar deneyin.' });
+            }
+        }
+        const limit = voterIdLimiter.take(clientKey(ip));
+        if (!limit.ok) {
+            res.set('Retry-After', String(limit.retryAfterSec));
+            return res.status(429).json({
+                error: 'Bu ağdan çok fazla yeni katılımcı geldi. Lütfen biraz sonra tekrar deneyin.',
+                retryAfterSec: limit.retryAfterSec
+            });
+        }
+        const { cookieValue } = identity.issue();
+        res.set('Set-Cookie', identity.cookieHeader(cookieValue, req.secure));
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('Katılımcı kimliği oluşturulamadı:', err);
+        res.status(500).json({ error: 'Sunucu hatası, lütfen tekrar deneyin.' });
+    }
 });
 
 // The shared admin panel was replaced by per-poll manage links.
@@ -48,7 +124,7 @@ app.get('/present', (req, res) => res.sendFile(path.join(__dirname, 'public', 'p
 app.get('/qr/:code.svg', (req, res) => {
     const { code } = req.params;
     if (!POLL_CODE_RE.test(code) || !polls.has(code)) return res.status(404).end();
-    QRCode.toString(joinUrl(req.get('host'), code), { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })
+    QRCode.toString(joinUrl(req.protocol, req.get('host'), code), { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })
         .then(svg => {
             res.set('Content-Type', 'image/svg+xml');
             res.set('Cache-Control', 'no-cache');
@@ -63,13 +139,12 @@ app.use(express.static('public', {
 
 const MAX_OPTIONS = 20;
 const MAX_TEXT = 200;
-const VOTER_ID_RE = /^[a-f0-9]{32}$/;
 const MANAGE_SECRET_RE = /^[A-Za-z0-9_-]{32}$/;
 const POLL_CODE_RE = /^\d{4,5}$/;
 // Anyone can create polls and the code space is finite (see generateCode),
-// so cap how fast a single address can create them.
-const CREATE_LIMIT = 20;
-const CREATE_WINDOW_MS = 60 * 60 * 1000;
+// so cap how fast a single client can create them.
+const createLimiter = createLimiter_({ burst: 20, perHour: 20 });
+const voterIdLimiter = createLimiter_({ burst: VOTER_ID_BURST, perHour: VOTER_ID_PER_HOUR });
 
 // polls: Map<code: string, poll>
 // poll: { code, question, options: string[], votes: number[],
@@ -84,6 +159,8 @@ const polls = new Map();
 // in-memory copy used for fast reads and broadcasts.
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const db = openDatabase(DATA_DIR);
+// Signs voter cookies; kept in the database so cookies survive restarts.
+const identity = createIdentity(db.getOrCreateSetting('voterCookieSecret', () => crypto.randomBytes(32).toString('hex')));
 
 function loadPolls() {
     for (const p of db.loadAll()) {
@@ -289,15 +366,6 @@ function buildCsv(poll) {
     return csvContent;
 }
 
-const createLog = new Map(); // address -> recent creation timestamps
-function allowCreate(address) {
-    const now = Date.now();
-    const recent = (createLog.get(address) || []).filter(t => now - t < CREATE_WINDOW_MS);
-    const allowed = recent.length < CREATE_LIMIT;
-    if (allowed) recent.push(now);
-    createLog.set(address, recent);
-    return allowed;
-}
 
 const getLocalIp = () => {
     const interfaces = os.networkInterfaces();
@@ -318,19 +386,29 @@ const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
 // The join link for a poll, as seen from the browser that asked. A presenter
 // who opened the page as "localhost" would otherwise put a link on screen
 // that no phone in the room can reach, so loopback hosts become the LAN IP.
-function joinUrl(host, code) {
+function joinUrl(protocol, host, code) {
     if (PUBLIC_URL) return `${PUBLIC_URL}/?code=${code}`;
     const valid = typeof host === 'string' && /^[A-Za-z0-9.\-]+(:\d+)?$|^\[[0-9A-Fa-f:.]+\](:\d+)?$/.test(host);
     const loopback = !valid || /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?$/.test(host);
     const origin = loopback ? `${localIp}:${host?.match(/:(\d+)$/)?.[1] || PORT}` : host;
-    return `http://${origin}/?code=${code}`;
+    return `${loopback || protocol !== 'https' ? 'http' : 'https'}://${origin}/?code=${code}`;
+}
+
+// The scheme the browser used, which is the proxy's scheme behind a trusted
+// reverse proxy (X-Forwarded-Proto).
+function socketProtocol(socket) {
+    const forwarded = String(socket.request.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+    if (TRUST_PROXY && forwarded) return forwarded;
+    return socket.request.socket.encrypted ? 'https' : 'http';
 }
 
 io.on('connection', (socket) => {
-    // Voters identify themselves with a random per-browser ID so the server,
-    // not localStorage, decides whether someone has already voted.
-    const claimed = socket.handshake.auth?.voterId;
-    socket.data.voterId = typeof claimed === 'string' && VOTER_ID_RE.test(claimed) ? claimed : `s:${socket.id}`;
+    // The voter identity comes from the signed cookie issued by /api/voter;
+    // without one this socket can watch and manage polls but not vote.
+    socket.data.voterId = identity.fromCookieHeader(socket.request.headers.cookie);
+    socket.data.ip = clientIp(socket.request);
+    // Lets the voter page notice a connection made before its cookie arrived.
+    socket.emit('session', { voter: Boolean(socket.data.voterId) });
     socket.data.pollCode = null;
     // Codes of the polls this socket has proven (with the secret) it may manage.
     socket.data.owned = new Set();
@@ -352,7 +430,7 @@ io.on('connection', (socket) => {
 
     // ── Owner events ───────────────────────────────────────────
     on('createPoll', (ack) => {
-        if (!allowCreate(socket.handshake.address)) {
+        if (!createLimiter.take(clientKey(socket.data.ip)).ok) {
             return reply(ack, { error: 'Çok fazla anket oluşturuldu, lütfen daha sonra tekrar deneyin.' });
         }
         const code = generateCode();
@@ -454,7 +532,7 @@ io.on('connection', (socket) => {
         const poll = typeof code === 'string' && POLL_CODE_RE.test(code) ? polls.get(code) : null;
         if (!poll) return reply(ack, { error: 'Geçersiz anket kodu.' });
         socket.join(`watch:${code}`);
-        reply(ack, { poll: publicView(poll), joinUrl: joinUrl(socket.handshake.headers.host, code) });
+        reply(ack, { poll: publicView(poll), joinUrl: joinUrl(socketProtocol(socket), socket.handshake.headers.host, code) });
     });
 
     // ── Voter events ───────────────────────────────────────────
@@ -462,6 +540,10 @@ io.on('connection', (socket) => {
         const poll = typeof code === 'string' && POLL_CODE_RE.test(code) ? polls.get(code) : null;
         if (!poll) {
             socket.emit('pollError', 'Geçersiz anket kodu.');
+            return;
+        }
+        if (!socket.data.voterId) {
+            socket.emit('pollError', 'Katılımcı doğrulanamadı. Lütfen sayfayı yenileyip tekrar deneyin.');
             return;
         }
         if (socket.data.pollCode !== code) {

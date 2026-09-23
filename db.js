@@ -55,6 +55,13 @@ CREATE UNIQUE INDEX polls_manage_hash ON polls(manage_hash);
 ALTER TABLE polls ADD COLUMN closed INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE polls ADD COLUMN closes_at INTEGER;
 `,
+    // 4: server settings, e.g. the secret that signs voter cookies.
+    `
+CREATE TABLE settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+`,
 ];
 const SCHEMA_VERSION = MIGRATIONS.length;
 
@@ -78,6 +85,8 @@ function openDatabase(dataDir) {
         insertPoll: db.prepare('INSERT INTO polls (code, question, manage_hash) VALUES (?, ?, ?)'),
         codeByManageHash: db.prepare('SELECT code FROM polls WHERE manage_hash = ?'),
         setVoting: db.prepare('UPDATE polls SET closed = ?, closes_at = ? WHERE code = ?'),
+        getSetting: db.prepare('SELECT value FROM settings WHERE key = ?'),
+        insertSetting: db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)'),
         updateQuestion: db.prepare("UPDATE polls SET question = ?, updated_at = datetime('now') WHERE code = ?"),
         deletePoll: db.prepare('DELETE FROM polls WHERE code = ?'),
         deleteOptions: db.prepare('DELETE FROM options WHERE poll_code = ?'),
@@ -165,6 +174,14 @@ function openDatabase(dataDir) {
                 stmt.deleteVotes.run(code);
                 for (const id of dropVoterIds) stmt.deleteVisitor.run(code, id);
             });
+        },
+
+        // Returns the stored setting, first storing `create()` if it is missing.
+        getOrCreateSetting(key, create) {
+            const row = stmt.getSetting.get(key);
+            if (row) return row.value;
+            stmt.insertSetting.run(key, create());
+            return stmt.getSetting.get(key).value;
         },
 
         close() {

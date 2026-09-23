@@ -5,6 +5,10 @@ ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 
 ## [Unreleased]
 
+### Güvenlik
+- **Toplu oy kullanmaya karşı koruma (internette yayın için)**: Katılımcı kimliği artık tarayıcıda üretilmiyor; sunucu her tarayıcıya imzalı, HttpOnly bir çerez veriyor (`/api/voter`) ve oy yalnızca geçerli çerezle kabul ediliyor. Yeni kimlikler ağ başına (IP; IPv6'da /64) sınırlı hızda veriliyor (`VOTER_ID_BURST`, `VOTER_ID_PER_HOUR`); sınıra takılan ziyaretçi bekleyip otomatik katılıyor. İsteğe bağlı Cloudflare Turnstile doğrulaması eklendi (`TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`). Önceden bir betik uydurma kimliklerle saniyede yüzlerce oy kullanabiliyordu.
+- **Ters vekil desteği**: `TRUST_PROXY` ile gerçek istemci adresi `X-Forwarded-For` başlığından alınıyor (hız sınırları için); ayarlanmadan bu başlık gelirse günlüğe uyarı yazılıyor. Anket oluşturma sınırı da gerçek istemci adresine göre uygulanıyor. Katılım bağlantıları ve QR kodu HTTPS vekil arkasında `https://` kullanıyor; çerezler HTTPS'te `Secure` olarak işaretleniyor.
+
 ### Düzeltildi
 - **Sunucu çökmelerine karşı koruma**: Tüm soket olayları hata yakalayıcıyla sarıldı; hatalı bir mesaj ya da veritabanı hatası artık sunucuyu çökertmiyor, hata günlüğe yazılıyor ve istemciye hata yanıtı dönülüyor. Veritabanı yazması başarısız olursa bellekteki durum değişmiyor. Mesaj boyutu 64 KB ile sınırlandı. Beklenmeyen bir hatada sunucu veritabanını düzgünce kapatıp çıkıyor (Docker `--restart` ile yeniden başlar).
 - **İçerik Güvenlik Politikası (CSP)**: Sayfalardaki satır içi betikler `public/js/` altındaki dosyalara taşındı ve sunucu yalnızca kendi betik dosyalarının çalışmasına izin veren bir `Content-Security-Policy` başlığı gönderiyor; `X-Content-Type-Options` ve `Referrer-Policy` başlıkları da eklendi.

@@ -58,3 +58,41 @@ Anketler, seçenekler, ziyaretçiler ve oylar bir SQLite veritabanında (`data/a
 Docker'da verinin kaybolmaması için yukarıdaki gibi `/app/data` dizinine bir volume bağlayın. Yedek almak için sunucu çalışırken bile `sqlite3 data/anket.db ".backup yedek.db"` kullanılabilir.
 
 Ortak admin panelli eski sürümden yükseltirken, sahibi olmayan mevcut anketler ve sonuçları veritabanından silinir.
+
+## 🌐 İnternette Yayınlama
+
+### HTTPS ve ters vekil (reverse proxy)
+Uygulamayı internete doğrudan açmayın; önüne HTTPS sağlayan bir ters vekil (nginx, Caddy, Cloudflare vb.) koyun ve şu ortam değişkenlerini ayarlayın:
+
+| Değişken | Açıklama |
+|---|---|
+| `TRUST_PROXY` | Önünüzdeki vekil sayısı (genellikle `1`). Ayarlanmazsa tüm ziyaretçiler vekilin adresinden geliyor sayılır ve hız sınırlarını birlikte paylaşır; sunucu bu durumda günlüğe bir uyarı yazar. Vekil yokken **ayarlamayın**, yoksa istemciler sahte `X-Forwarded-For` başlığıyla sınırları aşabilir. |
+| `PUBLIC_URL` | Katılım bağlantıları ve QR kodu için genel adres, örn. `https://anket.example.com`. |
+| `VOTER_ID_BURST` | Bir ağdan art arda verilebilecek yeni katılımcı kimliği sayısı (varsayılan `30`). |
+| `VOTER_ID_PER_HOUR` | Bu hakkın saatte kaç kimlik hızıyla dolduğu (varsayılan `360`, yani dakikada 6). |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | İsteğe bağlı Cloudflare Turnstile bot doğrulaması (aşağıda). |
+
+nginx örneği (Socket.IO için WebSocket başlıkları gereklidir):
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+### Tek kişi, tek oy
+Her tarayıcıya sunucu tarafından imzalı, JavaScript'in okuyamadığı (HttpOnly) bir katılımcı çerezi verilir; oy yalnızca geçerli bir çerezle kabul edilir ve her çerez bir ankette bir kez oy verebilir. Kötüye kullanımı sınırlayan asıl önlem, **yeni** çerezlerin ağ (IP adresi; IPv6'da /64 bloğu) başına sınırlı hızda verilmesidir: çerezini silip yeniden gelen biri ya da bir betik, varsayılan ayarlarla bir ağdan en fazla 30 kimlik alır, ardından dakikada 6 ile sınırlanır. Sınıra takılan ziyaretçi bir uyarı görür ve beklemesi gereken süre dolunca otomatik olarak katılır.
+
+**Aynı Wi-Fi'yi paylaşan kalabalık etkinlikler:** Salondaki herkes tek bir genel IP adresinden çıkıyorsa bu sınır gerçek katılımcıları da bekletebilir. Bu durumda Turnstile'ı açıp `VOTER_ID_BURST` değerini katılımcı sayısına göre yükseltin (örn. `300`).
+
+### Cloudflare Turnstile (önerilir)
+Turnstile, ücretsiz ve çoğu zaman görünmez bir bot doğrulamasıdır; açıkken yeni bir katılımcı kimliği ancak doğrulamayı geçen tarayıcılara verilir, bu da betiklerle toplu oy kullanmayı büyük ölçüde engeller. Cloudflare panelinden (Turnstile → Add site) alan adınız için bir site oluşturup `TURNSTILE_SITE_KEY` ve `TURNSTILE_SECRET_KEY` değerlerini ayarlayın. Açıkken sayfalar Cloudflare'in betiğini yükler; İçerik Güvenlik Politikası buna göre otomatik genişletilir.
+
+Bu önlemler kararlı bir saldırganı tamamen durduramaz (farklı ağlardan gelen çok sayıda cihaz gibi); gerçek anlamda "kişi başı tek oy" için kullanıcı girişi gerekir.
+
