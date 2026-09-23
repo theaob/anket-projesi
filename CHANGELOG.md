@@ -39,6 +39,7 @@ ve [Semantic Versioning](https://semver.org/lang/tr/) kurallarını kullanır.
 
 ### Değiştirildi
 - Docker imajı Node.js 18'den (desteği sona erdi) Node.js 22'ye yükseltildi; artık Node.js 22.13+ gerekiyor.
+- Docker imajı artık yalnızca `linux/amd64` için yayınlanıyor; `linux/arm64` imajı kaldırıldı (Node.js 22, derleme sırasındaki arm64 emülasyonunda çöküyordu).
 - Ziyaret sayısı artık tekil tarayıcı başına sayılıyor; sayfa yenileme veya yeniden bağlanma ziyareti ya da "oy vermeden ayrılan" sayısını şişirmiyor. "Oy vermeden ayrılan", oy vermemiş ve şu anda bağlı olmayan ziyaretçileri gösteriyor.
 
 ## [1.4.2] - 2026-08-05
